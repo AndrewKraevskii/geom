@@ -1,0 +1,22 @@
+.{
+    .name = .example,
+    .version = "0.0.0",
+    .fingerprint = 0x6eec9b9fcbd7e3c6,
+    .minimum_zig_version = "0.15.0-dev.58+1f92b394e",
+
+    .dependencies = .{
+        .geo_math = .{
+            .path = "..",
+        },
+        .raylib = .{
+            .url = "git+https://github.com/Not-Nik/raylib-zig.git#d4fc514d54a3b37b9b3e4f4983f611c3469e8c2a",
+            .hash = "raylib_zig-5.6.0-dev-KE8REHguBQAE0xoNkra7mtEqr8cCZHk7k_03txLZB-cZ",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}

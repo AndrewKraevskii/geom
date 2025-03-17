@@ -1,0 +1,12 @@
+.{
+    .name = .geo_math,
+    .version = "0.0.0",
+    .fingerprint = 0xad002b4ddf1e7d11,
+    .minimum_zig_version = "0.15.0-dev.58+1f92b394e",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
