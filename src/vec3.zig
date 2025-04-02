@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const Basis = enum {
+pub const Basis = enum {
     e0,
     e1,
     e2,
@@ -20,7 +20,7 @@ const Basis = enum {
     }
 };
 
-const Component = struct {
+pub const Component = struct {
     comps: std.EnumSet(Basis),
 
     pub fn format(
@@ -84,9 +84,13 @@ const Component = struct {
     pub fn grade(c: Component) usize {
         return c.comps.count();
     }
+
+    pub fn dual(c: Component) Component {
+        return .{ .comps = c.comps.complement() };
+    }
 };
 
-pub fn components(T: type) []const Component {
+pub fn components(T: type) []Component {
     var comps: [@typeInfo(T).@"struct".fields.len]Component = undefined;
     inline for (&comps, @typeInfo(T).@"struct".fields) |*comp, field| {
         comp.* = Component.fromString(field.name);
@@ -104,21 +108,8 @@ pub fn SelectGrade(T: type, grade: comptime_int) type {
     return TypeFromComponents(comps.slice());
 }
 
-pub fn selectGrade(value: anytype, grade: comptime_int) SelectGrade(@TypeOf(value, grade)) {
-    const T = @TypeOf(value);
-    var comps: std.BoundedArray(Component, components(T).len) = .{};
-    for (components(T)) |component| {
-        if (component.grade() == grade) {
-            comps.append(component);
-        }
-    }
-    return TypeFromComponents(comps.slice());
-}
-
-pub fn outerProduct(lhs: anytype, rhs: anytype) SelectGrade(GeomProduct(lhs, rhs)) {
-    return selectGrade(
-        geomProduct(lhs, rhs),
-    );
+pub fn selectGrade(value: anytype, grade: comptime_int) SelectGrade(@TypeOf(value), grade) {
+    return truncateType(value, SelectGrade(@TypeOf(value), grade));
 }
 
 pub fn gradeOf(value: type) comptime_int {
@@ -134,32 +125,43 @@ pub fn gradeOf(value: type) comptime_int {
 pub fn Meet(Left: type, Right: type) type {
     return SelectGrade(
         GeomProduct(Left, Right),
-        gradeOf(Left) + gradeOf(Right),
+        (gradeOf(Left) + gradeOf(Right)) % @typeInfo(Basis).@"enum".fields.len,
     );
 }
 
 /// OuterProduct
 pub fn meet(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
-    return selectGrade(
-        geomProduct(lhs, rhs),
-        gradeOf(@TypeOf(rhs)) + gradeOf(@TypeOf(rhs)),
-    );
+    return selectGrade(geomProduct(lhs, rhs), (gradeOf(@TypeOf(lhs)) + gradeOf(@TypeOf(rhs))) % @typeInfo(Basis).@"enum".fields.len);
 }
 
-// pub fn Join(Left: type, Right: type) type {
-//     return SelectGrade(
-//         GeomProduct(Left, Right),
-//         @abs(gradeOf(Left) - gradeOf(Right)),
-//     );
-// }
+pub fn Dual(T: type) type {
+    @setEvalBranchQuota(100000);
+    const comps = components(T);
+    for (comps) |*comp| {
+        comp.* = comp.dual();
+    }
+    return TypeFromComponents(comps);
+}
 
-// /// Regressive Product
-// pub fn join(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
-//     return selectGrade(
-//         geomProduct(lhs, rhs),
-//         @abs(gradeOf(@TypeOf(rhs)) - gradeOf(@TypeOf(rhs))),
-//     );
-// }
+pub fn dual(value: anytype) Dual(@TypeOf(value)) {
+    @setEvalBranchQuota(100000);
+    var result = std.mem.zeroes(Dual(@TypeOf(value)));
+
+    inline for (@typeInfo(@TypeOf(result)).@"struct".fields) |field| {
+        const dual_name = comptime std.fmt.comptimePrint("{}", .{Component.fromString(field.name).dual()});
+        @field(result, field.name) = @field(value, dual_name);
+    }
+    return result;
+}
+
+pub fn Join(Left: type, Right: type) type {
+    return Dual(Meet(Dual(Left), Dual(Right)));
+}
+
+/// Regressive Product
+pub fn join(lhs: anytype, rhs: anytype) Join(@TypeOf(lhs), @TypeOf(rhs)) {
+    return dual(meet(dual(lhs), dual(rhs)));
+}
 
 pub fn InnerProduct(Left: type, Right: type) type {
     return SelectGrade(
@@ -175,10 +177,22 @@ pub fn innerProduct(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs))
     );
 }
 
-pub fn main() void {
-    const result = Meet(Plane, Point);
+pub fn inverse(value: anytype) @TypeOf(value) {
+    var copy = value;
+    inline for (@typeInfo(@TypeOf(copy)).@"struct".fields) |field| {
+        if (comptime Component.fromString(field.name).grade() % 4 >= 2)
+            @field(copy, field.name) *= -1;
+    }
+    return copy;
+}
 
-    std.debug.print("{any}\n", .{result});
+pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
+    return truncateType(geomProduct(innerProduct(lhs, rhs), lhs), @TypeOf(rhs));
+}
+
+pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
+    const result = geomProduct(lhs, geomProduct(rhs, inverse(lhs)));
+    return truncateType(result, @TypeOf(rhs));
 }
 
 pub const Scalar = extern struct {
@@ -206,13 +220,17 @@ pub const Line = extern struct {
     e13: f32,
     e23: f32,
 };
-
+/// P = xe023 + ye013 + ze021 + e123
 pub const Point = extern struct {
+    /// scalar
     e123: f32,
 
-    e012: f32,
+    /// x
     e023: f32,
+    /// y
     e013: f32,
+    /// z
+    e012: f32,
 };
 
 pub const Rotor = extern struct {
@@ -244,6 +262,7 @@ pub const Translator = extern struct {
     e02: f32,
 };
 
+// No idea how to name it properly but it has both plane and point parts.
 pub const PointPlane = extern struct {
     e0: f32,
 
@@ -259,7 +278,8 @@ pub const PointPlane = extern struct {
 };
 
 pub fn GeomProduct(lhs: type, rhs: type) type {
-    @setEvalBranchQuota(100000);
+    @setEvalBranchQuota(1000000);
+
     var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
 
     inline for (components(lhs)) |first_e| {
@@ -309,6 +329,7 @@ pub fn TypeFromComponents(comps: []const Component) type {
 }
 
 pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
+    @setEvalBranchQuota(100000);
     var result = std.mem.zeroes(GeomProduct(@TypeOf(lhs), @TypeOf(rhs)));
 
     const L = @TypeOf(lhs);
@@ -332,18 +353,6 @@ pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf
         }
     }
     return result;
-}
-
-export fn pointVPoint(a: Point, b: Point) Motor {
-    return geomProduct(a, b);
-}
-
-export fn lineVLine(a: Line, b: Line) Motor {
-    return geomProduct(a, b);
-}
-
-export fn planeVLine(a: Plane, b: Line) PointPlane {
-    return geomProduct(a, b);
 }
 
 pub fn truncateType(source: anytype, T: type) T {
