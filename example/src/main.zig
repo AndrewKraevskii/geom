@@ -75,8 +75,12 @@ pub fn main() !void {
 
             drawLine(flip_around, .white);
             drawLine(join(end_point, start_point), .red);
-            drawLine(join(end_point, start_point), .red);
             drawLine(join(reflected, start_point), .red);
+            drawLine(geo.lerp(
+                flip_around,
+                join(end_point, start_point),
+                @floatCast((@sin(rl.getTime()) + 1) / 2),
+            ), .red);
 
             drawPoint(reflected, .green);
             drawPoint(projected, .yellow);
@@ -125,20 +129,3 @@ pub fn drawAxis(x: f32, y: f32, size: f32, color: Color) void {
     rl.drawLineV(.{ .x = x, .y = y - size / 2 }, .{ .x = x, .y = y + size / 2 }, color);
     rl.drawLineV(.{ .x = x - size / 2, .y = y }, .{ .x = x + size / 2, .y = y }, color);
 }
-
-// pub fn drawBivectorAt(start: MV, end: MV, pos: Vec2, fill_color: Color, outline_color: Color) void {
-//     const s: Vec2 = @bitCast(start.getVec3()[0..2].*);
-//     const e: Vec2 = @bitCast(end.getVec3()[0..2].*);
-
-//     if (s.x * e.y - s.y * e.x >= 0) {
-//         rl.drawTriangle(@bitCast(pos.add(s)), @bitCast(pos), @bitCast(pos.add(s).add(e)), fill_color);
-//         rl.drawTriangle(@bitCast(pos), @bitCast(pos.add(e)), @bitCast(pos.add(s).add(e)), fill_color);
-//     } else {
-//         rl.drawTriangle(@bitCast(pos), @bitCast(pos.add(s)), @bitCast(pos.add(s).add(e)), fill_color);
-//         rl.drawTriangle(@bitCast(pos.add(e)), @bitCast(pos), @bitCast(pos.add(s).add(e)), fill_color);
-//     }
-//     rl.drawLineV(@bitCast(pos), @bitCast(pos.add(s)), outline_color);
-//     rl.drawLineV(@bitCast(pos), @bitCast(pos.add(e)), outline_color);
-//     rl.drawLineV(@bitCast(pos.add(s)), @bitCast(pos.add(s).add(e)), outline_color);
-//     rl.drawLineV(@bitCast(pos.add(e)), @bitCast(pos.add(s).add(e)), outline_color);
-// }

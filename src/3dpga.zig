@@ -20,6 +20,88 @@ pub const Basis = enum {
     }
 };
 
+pub const Scalar = extern struct {
+    e: f32,
+};
+
+pub const PseudoScalar = extern struct {
+    e0123: f32,
+};
+
+pub const Plane = extern struct {
+    e0: f32,
+
+    e1: f32,
+    e2: f32,
+    e3: f32,
+};
+
+pub const Line = extern struct {
+    e01: f32,
+    e02: f32,
+    e03: f32,
+
+    e13: f32,
+    e23: f32,
+    e12: f32,
+};
+
+/// P = xe023 + ye013 + ze021 + e123
+pub const Point = extern struct {
+    e123: f32,
+
+    /// x
+    e023: f32,
+    /// y
+    e013: f32,
+    /// z
+    e012: f32,
+};
+
+pub const Rotor = extern struct {
+    e: f32,
+
+    e12: f32,
+    e13: f32,
+    e23: f32,
+};
+
+pub const Motor = extern struct {
+    e: f32,
+
+    e13: f32,
+    e23: f32,
+    e12: f32,
+
+    e01: f32,
+    e02: f32,
+    e03: f32,
+
+    e0123: f32,
+};
+
+pub const Translator = extern struct {
+    e: f32,
+
+    e01: f32,
+    e02: f32,
+};
+
+// No idea how to name it properly but it has both plane and point parts.
+pub const PointPlane = extern struct {
+    e0: f32,
+
+    e1: f32,
+    e2: f32,
+    e3: f32,
+
+    e023: f32,
+    e013: f32,
+    e012: f32,
+
+    e123: f32,
+};
+
 pub const Component = struct {
     comps: std.EnumSet(Basis),
 
@@ -195,88 +277,6 @@ pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
     return truncateType(result, @TypeOf(rhs));
 }
 
-pub const Scalar = extern struct {
-    e: f32,
-};
-
-pub const PseudoScalar = extern struct {
-    e0123: f32,
-};
-
-pub const Plane = extern struct {
-    e0: f32,
-
-    e1: f32,
-    e2: f32,
-    e3: f32,
-};
-
-pub const Line = extern struct {
-    e01: f32,
-    e02: f32,
-    e03: f32,
-
-    e12: f32,
-    e13: f32,
-    e23: f32,
-};
-/// P = xe023 + ye013 + ze021 + e123
-pub const Point = extern struct {
-    /// scalar
-    e123: f32,
-
-    /// x
-    e023: f32,
-    /// y
-    e013: f32,
-    /// z
-    e012: f32,
-};
-
-pub const Rotor = extern struct {
-    e: f32,
-
-    e12: f32,
-    e13: f32,
-    e23: f32,
-};
-
-pub const Motor = extern struct {
-    e: f32,
-
-    e12: f32,
-    e13: f32,
-    e23: f32,
-
-    e01: f32,
-    e02: f32,
-    e03: f32,
-
-    e0123: f32,
-};
-
-pub const Translator = extern struct {
-    e: f32,
-
-    e01: f32,
-    e02: f32,
-};
-
-// No idea how to name it properly but it has both plane and point parts.
-pub const PointPlane = extern struct {
-    e0: f32,
-
-    e1: f32,
-    e2: f32,
-    e3: f32,
-
-    e023: f32,
-    e013: f32,
-    e012: f32,
-
-    e123: f32,
-};
-
 pub fn GeomProduct(lhs: type, rhs: type) type {
     @setEvalBranchQuota(1000000);
 
@@ -353,6 +353,26 @@ pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf
         }
     }
     return result;
+}
+
+pub fn add(lhs: anytype, rhs: anytype) @TypeOf(lhs, rhs) {
+    var result: @TypeOf(lhs) = undefined;
+    inline for (@typeInfo(@TypeOf(rhs)).@"struct".fields) |field| {
+        @field(result, field.name) = @field(lhs, field.name) + @field(rhs, field.name);
+    }
+    return result;
+}
+
+pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
+    var result: @TypeOf(lhs) = undefined;
+    inline for (@typeInfo(@TypeOf(lhs)).@"struct".fields) |field| {
+        @field(result, field.name) = @field(lhs, field.name) * rhs;
+    }
+    return result;
+}
+
+pub fn lerp(lhs: anytype, rhs: anytype, t: f32) @TypeOf(lhs, rhs) {
+    return add(scale(lhs, 1 - t), scale(rhs, t));
 }
 
 pub fn truncateType(source: anytype, T: type) T {
