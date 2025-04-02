@@ -80,7 +80,7 @@ pub fn main() !void {
                 flip_around,
                 join(end_point, start_point),
                 @floatCast((@sin(rl.getTime()) + 1) / 2),
-            ), .red);
+            ), .pink);
 
             drawPoint(reflected, .green);
             drawPoint(projected, .yellow);
