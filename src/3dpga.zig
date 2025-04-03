@@ -292,7 +292,11 @@ pub fn GeomProduct(lhs: type, rhs: type) type {
 
     inline for (components(lhs)) |first_e| {
         inline for (components(rhs)) |second_e| {
-            const res, _ = first_e.mult(second_e);
+            const res, const sign = first_e.mult(second_e);
+
+            if (sign == 0) {
+                continue;
+            }
 
             for (comps.slice()) |comp| {
                 if (std.meta.eql(comp, res)) break;
@@ -334,6 +338,12 @@ pub fn TypeFromComponents(comps: []const Component) type {
 
         return T;
     }
+
+    var res: []const u8 = "";
+    for (comps) |comp| {
+        res = res ++ std.fmt.comptimePrint(" {}", .{comp});
+    }
+    @compileError("Got component with this components. Provide type to store them" ++ res);
 }
 
 pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
