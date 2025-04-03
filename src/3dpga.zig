@@ -39,6 +39,7 @@ pub const PseudoScalar = extern struct {
     e0123: f32,
 };
 
+/// Also known as 1-vector
 pub const Plane = extern struct {
     e0: f32,
 
@@ -47,6 +48,7 @@ pub const Plane = extern struct {
     e3: f32,
 };
 
+/// Also known as 2-vector
 pub const Line = extern struct {
     e01: f32,
     e02: f32,
@@ -57,7 +59,7 @@ pub const Line = extern struct {
     e12: f32,
 };
 
-/// P = xe023 + ye013 + ze021 + e123
+/// Also known as 3-vector
 pub const Point = extern struct {
     e123: f32,
 
@@ -69,6 +71,7 @@ pub const Point = extern struct {
     e012: f32,
 };
 
+/// Also known as `quaternion`
 pub const Rotor = extern struct {
     e: f32,
 
@@ -77,11 +80,12 @@ pub const Rotor = extern struct {
     e23: f32,
 };
 
+/// Also known as `dual quaternion`
 pub const Motor = extern struct {
     e: f32,
 
-    e13: f32,
     e23: f32,
+    e13: f32,
     e12: f32,
 
     e01: f32,
@@ -91,11 +95,22 @@ pub const Motor = extern struct {
     e0123: f32,
 };
 
-pub const Translator = extern struct {
+pub const TwoReflection = extern struct {
     e: f32,
+
+    e23: f32,
+    e13: f32,
+    e12: f32,
 
     e01: f32,
     e02: f32,
+    e03: f32,
+};
+
+pub const Translator = extern struct {
+    e01: f32,
+    e02: f32,
+    e03: f32,
 };
 
 // No idea how to name it properly but it has both plane and point parts.
@@ -111,6 +126,19 @@ pub const PointPlane = extern struct {
     e012: f32,
 
     e123: f32,
+};
+
+// No idea how to name it properly but it has both plane and point parts.
+pub const AThing = extern struct {
+    e0: f32,
+
+    e1: f32,
+    e2: f32,
+    e3: f32,
+
+    e023: f32,
+    e013: f32,
+    e012: f32,
 };
 
 pub const Component = struct {
@@ -235,16 +263,21 @@ pub fn Dual(T: type) type {
 }
 
 pub fn dual(value: anytype) Dual(@TypeOf(value)) {
-    var result = std.mem.zeroes(Dual(@TypeOf(value)));
+    var result: Dual(@TypeOf(value)) = undefined;
 
     inline for (@typeInfo(@TypeOf(result)).@"struct".fields) |field| {
-        const dual_name = comptime std.fmt.comptimePrint("{}", .{Component.fromString(field.name).dual()});
-        @field(result, field.name) = @field(value, dual_name);
+        const comp = comptime Component.fromString(field.name).dual();
+        const name = comptime std.fmt.comptimePrint("{}", .{comp});
+
+        if (comptime comp.grade() == 3) {
+            @field(result, field.name) = -@field(value, name);
+        } else @field(result, field.name) = @field(value, name);
     }
     return result;
 }
 
 pub fn Join(Left: type, Right: type) type {
+    @setEvalBranchQuota(10000);
     return Dual(Meet(Dual(Left), Dual(Right)));
 }
 
@@ -263,7 +296,7 @@ pub fn InnerProduct(Left: type, Right: type) type {
 pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     return selectGrade(
         geomProduct(lhs, rhs),
-        @abs(gradeOf(@TypeOf(rhs)) - gradeOf(@TypeOf(rhs))),
+        @abs(gradeOf(@TypeOf(lhs)) - gradeOf(@TypeOf(rhs))),
     );
 }
 
@@ -285,6 +318,7 @@ pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
     return truncateType(result, @TypeOf(rhs));
 }
 
+// TODO: perf even tho we skip some componets which are 0 we would still gane them in TypeFromComponents. Do something about it.
 pub fn GeomProduct(lhs: type, rhs: type) type {
     @setEvalBranchQuota(50000);
 
@@ -318,6 +352,7 @@ pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf
             const first_e = comptime Component.fromString(lhf.name);
             const second_e = comptime Component.fromString(rhf.name);
             const res, const sign = comptime first_e.mult(second_e);
+            if (comptime sign == 0) continue;
 
             const name = std.fmt.comptimePrint("{}", .{res});
 
@@ -347,14 +382,16 @@ pub fn TypeFromComponents(comps: []const Component) type {
         Point,
         Rotor,
         Motor,
+        TwoReflection,
         Translator,
         Scalar,
         PseudoScalar,
         PointPlane,
+        AThing,
     };
 
     type: for (types) |T| {
-        if (@typeInfo(T).@"struct".fields.len < comps.len) continue;
+        if (@typeInfo(T).@"struct".fields.len != comps.len) continue;
 
         for (comps) |comp| {
             if (!componentContainedInType(comp, T)) {
@@ -381,11 +418,11 @@ pub fn add(lhs: anytype, rhs: anytype) @TypeOf(lhs, rhs) {
 }
 
 pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
-    var result: @TypeOf(lhs) = undefined;
+    var copy = lhs;
     inline for (@typeInfo(@TypeOf(lhs)).@"struct".fields) |field| {
-        @field(result, field.name) = @field(lhs, field.name) * rhs;
+        @field(copy, field.name) *= rhs;
     }
-    return result;
+    return copy;
 }
 
 pub fn norm(value: anytype) f32 {
