@@ -3,6 +3,7 @@ const std = @import("std");
 const geo = @import("geo");
 const Vec2 = geo.Vec2;
 const rl = @import("raylib");
+const Point = geo.Point;
 const Color = rl.Color;
 const sandwich = geo.sandwich;
 const project = geo.project;
@@ -21,13 +22,13 @@ pub fn main() !void {
         .rotation = 0,
     };
 
-    var start_point: geo.Point = .{
+    var red_point: Point = .{
         .e123 = 1,
         .e012 = 0,
         .e023 = 1,
         .e013 = 1,
     };
-    var end_point: geo.Point = .{
+    var blue_point: Point = .{
         .e123 = 1,
         .e012 = 0,
         .e023 = 1,
@@ -43,12 +44,12 @@ pub fn main() !void {
         camera.begin();
         defer camera.end();
 
-        drawAxis(0, 0, 1000, .red);
-        rl.drawText("geo math", 0, 0, 10, .red);
+        // drawAxis(0, 0, 1000, .red);
+        // rl.drawText("geo math", 0, 0, 10, .red);
 
         const vec = rl.getScreenToWorld2D(rl.getMousePosition(), camera);
 
-        const mouse_pos: geo.Point =
+        const mouse_pos: Point =
             .{
                 .e123 = 1,
                 .e023 = vec.x,
@@ -57,40 +58,48 @@ pub fn main() !void {
             };
 
         if (rl.isMouseButtonDown(.left)) {
-            start_point = mouse_pos;
+            red_point = mouse_pos;
         } else if (rl.isMouseButtonDown(.right)) {
-            end_point = mouse_pos;
+            blue_point = mouse_pos;
         }
 
         {
-            const flip_around = join(end_point, geo.Point{
+            const white_line = join(blue_point, Point{
                 .e123 = 1,
                 .e023 = 0,
                 .e013 = 0,
                 .e012 = 0,
             });
-
-            const reflected = sandwich(flip_around, start_point);
-            const projected = project(flip_around, start_point);
-
-            drawLine(flip_around, .white);
-            drawLine(join(end_point, start_point), .red);
-            drawLine(join(reflected, start_point), .red);
-            drawLine(geo.lerp(
-                flip_around,
-                join(end_point, start_point),
+            const pink_line = geo.lerp(
+                white_line,
+                join(blue_point, red_point),
                 @floatCast((@sin(rl.getTime()) + 1) / 2),
-            ), .pink);
+            );
 
-            drawPoint(reflected, .green);
-            drawPoint(projected, .yellow);
-            drawPoint(start_point, .red);
-            drawPoint(end_point, .blue);
+            const green_point = sandwich(mult(white_line, pink_line), red_point);
+            const yellow_point = project(white_line, red_point);
+
+            drawTriangle(.{ green_point, yellow_point, blue_point }, .magenta);
+            drawLine(white_line, .white);
+            drawLine(join(blue_point, red_point), .red);
+            drawLine(join(green_point, red_point), .red);
+            drawLine(pink_line, .pink);
+
+            drawPoint(green_point, .green);
+            drawPoint(yellow_point, .yellow);
+            drawPoint(red_point, .red);
+            drawPoint(blue_point, .blue);
+            drawLine(meet(geo.Plane{
+                .e2 = 0,
+                .e1 = 0,
+                .e3 = 1,
+                .e0 = 0,
+            }, geo.dual(blue_point)), .blue);
         }
     }
 }
 
-pub fn drawPoint(point: geo.Point, color: Color) void {
+pub fn drawPoint(point: Point, color: Color) void {
     const vec: rl.Vector2 = .{
         .x = point.e023 / point.e123,
         .y = point.e013 / point.e123,
@@ -116,13 +125,29 @@ pub fn drawLine(line: geo.Line, color: Color) void {
     const start = geo.meet(left_side_of_screen, line);
     const end = geo.meet(right_side_of_screen, line);
 
-    rl.drawLineV(.{
-        .x = start.e023 / start.e123,
-        .y = start.e013 / start.e123,
-    }, .{
-        .x = end.e023 / end.e123,
-        .y = end.e013 / end.e123,
-    }, color);
+    rl.drawLineV(toRaylibPoint(start), toRaylibPoint(end), color);
+}
+
+pub fn toRaylibPoint(p: Point) rl.Vector2 {
+    return .{
+        .x = p.e023 / p.e123,
+        .y = p.e013 / p.e123,
+    };
+}
+
+pub fn drawTriangle(points: [3]Point, color: Color) void {
+    rl.drawTriangle(
+        toRaylibPoint(points[0]),
+        toRaylibPoint(points[1]),
+        toRaylibPoint(points[2]),
+        color,
+    );
+    rl.drawTriangle(
+        toRaylibPoint(points[1]),
+        toRaylibPoint(points[0]),
+        toRaylibPoint(points[2]),
+        color,
+    );
 }
 
 pub fn drawAxis(x: f32, y: f32, size: f32, color: Color) void {

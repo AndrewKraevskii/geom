@@ -6,6 +6,17 @@ pub const Basis = enum {
     e2,
     e3,
 
+    comptime {
+        for (@typeInfo(Basis).@"enum".fields) |field| {
+            const value = std.meta.stringToEnum(Basis, field.name).?;
+            std.debug.assert(value == fromNum(@tagName(value)[1] - '0'));
+        }
+    }
+
+    pub fn fromNum(num: u8) Basis {
+        return @enumFromInt(num);
+    }
+
     pub fn square(b: Basis) i2 {
         return switch (b) {
             .e0 => 0,
@@ -149,8 +160,7 @@ pub const Component = struct {
         var res: Component = .{ .comps = .initEmpty() };
         for (str[1..]) |digit| {
             std.debug.assert(std.ascii.isDigit(digit));
-            const name = "e" ++ .{digit};
-            res.comps.insert(std.meta.stringToEnum(Basis, name).?);
+            res.comps.insert(.fromNum(digit - '0'));
         }
         return res;
     }
@@ -217,7 +227,7 @@ pub fn meet(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
 }
 
 pub fn Dual(T: type) type {
-    @setEvalBranchQuota(100000);
+    @setEvalBranchQuota(10000);
     const comps = components(T);
     for (comps) |*comp| {
         comp.* = comp.dual();
@@ -226,7 +236,7 @@ pub fn Dual(T: type) type {
 }
 
 pub fn dual(value: anytype) Dual(@TypeOf(value)) {
-    @setEvalBranchQuota(100000);
+    @setEvalBranchQuota(10000);
     var result = std.mem.zeroes(Dual(@TypeOf(value)));
 
     inline for (@typeInfo(@TypeOf(result)).@"struct".fields) |field| {
@@ -301,6 +311,13 @@ pub fn GeomProduct(lhs: type, rhs: type) type {
     return TypeFromComponents(comps.slice());
 }
 
+pub fn componentContainedInType(comp: Component, T: type) bool {
+    inline for (components(T)) |component|
+        if (std.meta.eql(comp, component)) return true;
+
+    return false;
+}
+
 pub fn TypeFromComponents(comps: []const Component) type {
     const types: []const type = &.{
         Plane,
@@ -317,11 +334,10 @@ pub fn TypeFromComponents(comps: []const Component) type {
     type: for (types) |T| {
         if (@typeInfo(T).@"struct".fields.len < comps.len) continue;
 
-        component: for (comps) |comp| {
-            inline for (components(T)) |component|
-                if (std.meta.eql(comp, component)) continue :component;
-
-            continue :type;
+        for (comps) |comp| {
+            if (!componentContainedInType(comp, T)) {
+                continue :type;
+            }
         }
 
         return T;
