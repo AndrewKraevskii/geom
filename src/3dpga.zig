@@ -267,7 +267,7 @@ pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @Type
     );
 }
 
-pub fn inverse(value: anytype) @TypeOf(value) {
+pub fn reverse(value: anytype) @TypeOf(value) {
     var copy = value;
     inline for (@typeInfo(@TypeOf(copy)).@"struct".fields) |field| {
         if (comptime Component.fromString(field.name).grade() % 4 >= 2)
@@ -281,7 +281,7 @@ pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
 }
 
 pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
-    const result = geomProduct(lhs, geomProduct(rhs, inverse(lhs)));
+    const result = geomProduct(lhs, geomProduct(rhs, reverse(lhs)));
     return truncateType(result, @TypeOf(rhs));
 }
 
@@ -389,7 +389,7 @@ pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
 }
 
 pub fn norm(value: anytype) f32 {
-    const result = truncateType(innerProduct(value, value), Scalar);
+    const result = innerProduct(value, reverse(value));
     return @sqrt(result.e);
 }
 
