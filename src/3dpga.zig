@@ -260,7 +260,7 @@ pub fn InnerProduct(Left: type, Right: type) type {
     );
 }
 
-pub fn innerProduct(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
+pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     return selectGrade(
         geomProduct(lhs, rhs),
         @abs(gradeOf(@TypeOf(rhs)) - gradeOf(@TypeOf(rhs))),
@@ -286,7 +286,7 @@ pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
 }
 
 pub fn GeomProduct(lhs: type, rhs: type) type {
-    @setEvalBranchQuota(39000);
+    @setEvalBranchQuota(50000);
 
     var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
 
@@ -386,6 +386,11 @@ pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
         @field(result, field.name) = @field(lhs, field.name) * rhs;
     }
     return result;
+}
+
+pub fn norm(value: anytype) f32 {
+    const result = truncateType(innerProduct(value, value), Scalar);
+    return result.e;
 }
 
 pub fn lerp(lhs: anytype, rhs: anytype, t: f32) @TypeOf(lhs, rhs) {
