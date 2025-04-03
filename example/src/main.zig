@@ -80,7 +80,6 @@ pub fn main() !void {
             },
         );
 
-        // @compileLog(@typeInfo(@TypeOf(vec)).@"struct".fields);
         const mouse_pos: Point =
             .{
                 .e123 = 1,
@@ -99,7 +98,7 @@ pub fn main() !void {
             const white_line = join(blue_point, Point{
                 .e123 = 1,
                 .e023 = 0,
-                .e013 = 0,
+                .e013 = 1,
                 .e012 = 0,
             });
             const pink_line = geo.lerp(
@@ -111,22 +110,22 @@ pub fn main() !void {
             const yellow_point = project(white_line, red_point);
 
             drawTriangle(.{ green_point, yellow_point, blue_point }, .magenta);
-            // drawLine(white_line, .white);
-            // drawLine(join(blue_point, red_point), .red);
-            // drawLine(join(green_point, red_point), .red);
-            // drawLine(pink_line, .pink);
+            drawLine(white_line, .white);
+            drawLine(join(blue_point, red_point), .red);
+            drawLine(join(green_point, red_point), .red);
+            drawLine(pink_line, .pink);
 
             drawPoint(green_point, .green);
             drawPoint(yellow_point, .yellow);
             drawPoint(red_point, .red);
             drawPoint(blue_point, .blue);
             drawLineSegment(blue_point, red_point, .red);
-            // drawLine(meet(geo.Plane{
-            //     .e2 = 0,
-            //     .e1 = 0,
-            //     .e3 = 1,
-            //     .e0 = 0,
-            // }, geo.dual(blue_point)), .blue);
+            drawLine(meet(geo.Plane{
+                .e2 = 0,
+                .e1 = 0,
+                .e3 = 1,
+                .e0 = 0,
+            }, geo.dual(blue_point)), .blue);
         }
     }
 }
@@ -140,12 +139,27 @@ pub fn drawPoint(point: Point, color: Color) void {
     rl.drawSphere(vec, 1, color);
 }
 
-// pub fn drawLine(line: geo.Line, color: Color) void {
-//     rl.drawLine3D(toRaylibPoint(start), toRaylibPoint(end), color);
-// }
+pub fn drawLine(line: geo.Line, color: Color) void {
+    const plane_distance_from_origin = 10;
+
+    var plane = geo.normalized(geo.innerProduct(
+        geo.Point{
+            .e123 = 1,
+            .e023 = 0,
+            .e013 = 0,
+            .e012 = 0,
+        },
+        line,
+    ));
+    plane.e0 = plane_distance_from_origin;
+    const start = meet(plane, line);
+    plane.e0 *= -1;
+    const end = meet(plane, line);
+
+    drawLineSegment(start, end, color);
+}
 
 pub fn drawLineSegment(start: geo.Point, end: geo.Point, color: Color) void {
-    std.debug.print("start: {any} end: {any}\n", .{ toRaylibPoint(start), toRaylibPoint(end) });
     rl.drawLine3D(toRaylibPoint(start), toRaylibPoint(end), color);
 }
 
@@ -171,8 +185,3 @@ pub fn drawTriangle(points: [3]Point, color: Color) void {
         color,
     );
 }
-
-// pub fn drawAxis(x: f32, y: f32, size: f32, color: Color) void {
-//     rl.drawLineV(.{ .x = x, .y = y - size / 2 }, .{ .x = x, .y = y + size / 2 }, color);
-//     rl.drawLineV(.{ .x = x - size / 2, .y = y }, .{ .x = x + size / 2, .y = y }, color);
-// }

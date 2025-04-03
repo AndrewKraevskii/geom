@@ -307,6 +307,32 @@ pub fn GeomProduct(lhs: type, rhs: type) type {
     return TypeFromComponents(comps.slice());
 }
 
+pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
+    var result = std.mem.zeroes(GeomProduct(@TypeOf(lhs), @TypeOf(rhs)));
+
+    const L = @TypeOf(lhs);
+    const R = @TypeOf(rhs);
+
+    inline for (@typeInfo(L).@"struct".fields) |lhf| {
+        inline for (@typeInfo(R).@"struct".fields) |rhf| {
+            const first_e = comptime Component.fromString(lhf.name);
+            const second_e = comptime Component.fromString(rhf.name);
+            const res, const sign = comptime first_e.mult(second_e);
+
+            const name = std.fmt.comptimePrint("{}", .{res});
+
+            @field(result, name) =
+                @mulAdd(
+                    f32,
+                    @field(lhs, lhf.name),
+                    @field(rhs, rhf.name) * @as(f32, @floatFromInt(sign)),
+                    @field(result, name),
+                );
+        }
+    }
+    return result;
+}
+
 pub fn componentContainedInType(comp: Component, T: type) bool {
     inline for (components(T)) |component|
         if (std.meta.eql(comp, component)) return true;
@@ -346,32 +372,6 @@ pub fn TypeFromComponents(comps: []const Component) type {
     @compileError("Got component with this components. Provide type to store them" ++ res);
 }
 
-pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
-    var result = std.mem.zeroes(GeomProduct(@TypeOf(lhs), @TypeOf(rhs)));
-
-    const L = @TypeOf(lhs);
-    const R = @TypeOf(rhs);
-
-    inline for (@typeInfo(L).@"struct".fields) |lhf| {
-        inline for (@typeInfo(R).@"struct".fields) |rhf| {
-            const first_e = comptime Component.fromString(lhf.name);
-            const second_e = comptime Component.fromString(rhf.name);
-            const res, const sign = comptime first_e.mult(second_e);
-
-            const name = std.fmt.comptimePrint("{}", .{res});
-
-            @field(result, name) =
-                @mulAdd(
-                    f32,
-                    @field(lhs, lhf.name),
-                    @field(rhs, rhf.name) * @as(f32, @floatFromInt(sign)),
-                    @field(result, name),
-                );
-        }
-    }
-    return result;
-}
-
 pub fn add(lhs: anytype, rhs: anytype) @TypeOf(lhs, rhs) {
     var result: @TypeOf(lhs) = undefined;
     inline for (@typeInfo(@TypeOf(rhs)).@"struct".fields) |field| {
@@ -390,7 +390,11 @@ pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
 
 pub fn norm(value: anytype) f32 {
     const result = truncateType(innerProduct(value, value), Scalar);
-    return result.e;
+    return @sqrt(result.e);
+}
+
+pub fn normalized(value: anytype) @TypeOf(value) {
+    return scale(value, 1 / norm(value));
 }
 
 pub fn lerp(lhs: anytype, rhs: anytype, t: f32) @TypeOf(lhs, rhs) {
