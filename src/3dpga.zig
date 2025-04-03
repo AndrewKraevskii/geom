@@ -227,7 +227,6 @@ pub fn meet(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
 }
 
 pub fn Dual(T: type) type {
-    @setEvalBranchQuota(10000);
     const comps = components(T);
     for (comps) |*comp| {
         comp.* = comp.dual();
@@ -236,7 +235,6 @@ pub fn Dual(T: type) type {
 }
 
 pub fn dual(value: anytype) Dual(@TypeOf(value)) {
-    @setEvalBranchQuota(10000);
     var result = std.mem.zeroes(Dual(@TypeOf(value)));
 
     inline for (@typeInfo(@TypeOf(result)).@"struct".fields) |field| {
@@ -339,7 +337,6 @@ pub fn TypeFromComponents(comps: []const Component) type {
 }
 
 pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
-    @setEvalBranchQuota(100000);
     var result = std.mem.zeroes(GeomProduct(@TypeOf(lhs), @TypeOf(rhs)));
 
     const L = @TypeOf(lhs);
