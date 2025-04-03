@@ -288,7 +288,7 @@ pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
 }
 
 pub fn GeomProduct(lhs: type, rhs: type) type {
-    @setEvalBranchQuota(1000000);
+    @setEvalBranchQuota(39000);
 
     var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
 
@@ -301,12 +301,6 @@ pub fn GeomProduct(lhs: type, rhs: type) type {
             } else comps.appendAssumeCapacity(res);
         }
     }
-
-    std.mem.sort(Component, comps.slice(), {}, struct {
-        fn less(_: void, l: Component, r: Component) bool {
-            return l.less(r);
-        }
-    }.less);
 
     return TypeFromComponents(comps.slice());
 }
