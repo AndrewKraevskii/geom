@@ -8,7 +8,7 @@ pub const Basis = enum {
 
     comptime {
         for (@typeInfo(Basis).@"enum".fields) |field| {
-            const value = std.meta.stringToEnum(Basis, field.name).?;
+            const value = @field(Basis, field.name);
             std.debug.assert(value == fromNum(@tagName(value)[1] - '0'));
         }
     }
@@ -108,6 +108,8 @@ pub const TwoReflection = extern struct {
 };
 
 pub const Translator = extern struct {
+    e: f32,
+
     e01: f32,
     e02: f32,
     e03: f32,
@@ -320,7 +322,7 @@ pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
 
 // TODO: perf even tho we skip some componets which are 0 we would still gane them in TypeFromComponents. Do something about it.
 pub fn GeomProduct(lhs: type, rhs: type) type {
-    @setEvalBranchQuota(50000);
+    @setEvalBranchQuota(100000);
 
     var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
 
