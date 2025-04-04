@@ -393,7 +393,7 @@ pub fn TypeFromComponents(comps: []const Component) type {
     };
 
     type: for (types) |T| {
-        if (@typeInfo(T).@"struct".fields.len != comps.len) continue;
+        if (@typeInfo(T).@"struct".fields.len < comps.len) continue;
 
         for (comps) |comp| {
             if (!componentContainedInType(comp, T)) {
@@ -411,7 +411,7 @@ pub fn TypeFromComponents(comps: []const Component) type {
     @compileError("Got component with this components. Provide type to store them" ++ res);
 }
 
-pub fn add(lhs: anytype, rhs: anytype) @TypeOf(lhs, rhs) {
+pub fn add(lhs: anytype, rhs: @TypeOf(lhs)) @TypeOf(lhs) {
     var result: @TypeOf(lhs) = undefined;
     inline for (@typeInfo(@TypeOf(rhs)).@"struct".fields) |field| {
         @field(result, field.name) = @field(lhs, field.name) + @field(rhs, field.name);
@@ -428,7 +428,7 @@ pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
 }
 
 pub fn norm(value: anytype) f32 {
-    const result = innerProduct(value, reverse(value));
+    const result = geomProduct(value, reverse(value));
     return @sqrt(result.e);
 }
 
@@ -446,4 +446,55 @@ pub fn truncateType(source: anytype, T: type) T {
         @field(result, field.name) = @field(source, field.name);
     }
     return result;
+}
+
+pub fn sqrt(value: anytype) @TypeOf(value) {
+    var normalized_value = normalized(value);
+    normalized_value.e += 1;
+    return normalized_value;
+}
+
+// pub fn log(motor: Motor) Line {
+//     @setEvalBranchQuota(10000);
+//     const scalar_part = motor.e;
+//     const a = 1 / (1 - scalar_part * scalar_part);
+//     const b = @sqrt(a) * std.math.acos(scalar_part);
+//     const c = a * dual(motor).e * (1 - b * scalar_part);
+
+//     const result = add(scale(selectGrade(motor, 2), b), geomProduct(scale(selectGrade(motor, 2), c), PseudoScalar{
+//         .e0123 = 1,
+//     }));
+
+//     return result;
+// }
+
+pub fn exp(bivector: Line) Motor {
+    const l = (bivector.e12 * bivector.e12 + bivector.e13 * bivector.e13 + bivector.e23 * bivector.e23);
+
+    if (l == 0) return .{
+        .e = 1,
+        .e01 = bivector.e01,
+        .e02 = bivector.e02,
+        .e03 = bivector.e03,
+        .e12 = 0,
+        .e13 = 0,
+        .e23 = 0,
+        .e0123 = 0,
+    };
+    const m = (bivector.e01 * bivector.e23 + bivector.e02 * -bivector.e13 + bivector.e03 * bivector.e12);
+    const a = @sqrt(l);
+    const c = @cos(a);
+    const s = @sin(a) / a;
+    const t = m / l * (c - s);
+
+    return .{
+        .e = c,
+        .e01 = s * bivector.e01 + t * bivector.e23,
+        .e02 = s * bivector.e02 + t * -bivector.e13,
+        .e03 = s * bivector.e03 + t * bivector.e12,
+        .e12 = s * bivector.e12,
+        .e13 = s * bivector.e13,
+        .e23 = s * bivector.e23,
+        .e0123 = m * s,
+    };
 }

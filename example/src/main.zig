@@ -57,8 +57,6 @@ pub fn main() !void {
 
         rl.clearBackground(.black);
 
-        rl.drawFPS(0, 0);
-
         camera.begin();
         defer camera.end();
         rl.drawGrid(10, 1);
@@ -103,9 +101,16 @@ pub fn main() !void {
             const pink_line = geo.lerp(
                 geo.normalized(white_line),
                 geo.normalized(join(blue_point, red_point)),
-                @floatCast(@abs(@mod(rl.getTime(), 2) - 1)),
+                0.5,
             );
-            const green_point = sandwich(mult(white_line, pink_line), red_point);
+
+            const green_point = sandwich(
+                // mult(white_line, pink_line),
+                geo.exp(
+                    geo.scale(pink_line, @floatCast(rl.getTime())),
+                ),
+                red_point,
+            );
             const yellow_point = project(white_line, red_point);
 
             drawLine(white_line, .white);
@@ -118,7 +123,6 @@ pub fn main() !void {
             drawPoint(red_point, .red);
             drawPoint(blue_point, .blue);
             drawLineSegment(blue_point, red_point, .red);
-            drawPoint(origin, .ray_white);
             drawArrow(origin, .{
                 .e123 = 1,
                 .e023 = 0,
@@ -135,6 +139,7 @@ pub fn main() !void {
             };
             drawPlane(plane, .dark_blue);
             drawLine(meet(plane, dual_plane), .white);
+            drawMotor(mult(white_line, pink_line), .brown);
         }
     }
 }
@@ -196,6 +201,10 @@ pub fn drawPlane(plane: geo.Plane, color: Color) void {
     };
     drawTriangle(points[0..3].*, color.alpha(0.5));
     drawTriangle(points[1..4].*, color.alpha(0.5));
+}
+
+pub fn drawMotor(motor: geo.Motor, color: Color) void {
+    drawLine(geo.truncateType(motor, geo.Line), color);
 }
 
 pub fn drawLineSegment(start: geo.Point, end: geo.Point, color: Color) void {
