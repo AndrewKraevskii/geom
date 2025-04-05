@@ -316,7 +316,7 @@ pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
 }
 
 pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
-    const result = geomProduct(lhs, geomProduct(rhs, reverse(lhs)));
+    const result = scale(geomProduct(lhs, geomProduct(rhs, reverse(lhs))), -1);
     return truncateType(result, @TypeOf(rhs));
 }
 
