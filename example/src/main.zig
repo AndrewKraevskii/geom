@@ -2,14 +2,16 @@ const std = @import("std");
 
 const geo = @import("geo");
 const Vec2 = geo.Vec2;
-const rl = @import("raylib");
 const Point = geo.Point;
-const Color = rl.Color;
 const sandwich = geo.sandwich;
 const project = geo.project;
 const mult = geo.geomProduct;
 const join = geo.join;
 const meet = geo.meet;
+const rl = @import("raylib");
+const Color = rl.Color;
+
+const draw = @import("draw.zig");
 
 const origin: geo.Point = .{
     .e123 = 1,
@@ -98,149 +100,50 @@ pub fn main() !void {
                 .e013 = 1,
                 .e012 = 0,
             });
+
             const pink_line = geo.lerp(
                 geo.normalized(white_line),
                 geo.normalized(join(blue_point, red_point)),
                 0.5,
+                // @floatCast(@sin(rl.getTime())),
             );
 
             const green_point = sandwich(
                 // mult(white_line, pink_line),
                 geo.exp(
-                    geo.scale(pink_line, @floatCast(rl.getTime())),
+                    geo.scale(geo.normalized(pink_line), @floatCast(rl.getTime())),
                 ),
                 red_point,
             );
             const yellow_point = project(white_line, red_point);
 
-            drawLine(white_line, .white);
-            drawLine(join(blue_point, red_point), .red);
-            drawLine(join(green_point, red_point), .red);
-            drawLine(pink_line, .pink);
+            draw.line(white_line, .white);
+            draw.line(join(blue_point, red_point), .red);
+            draw.line(join(green_point, red_point), .red);
+            draw.line(pink_line, .pink);
 
-            drawPoint(green_point, .green);
-            drawPoint(yellow_point, .yellow);
-            drawPoint(red_point, .red);
-            drawPoint(blue_point, .blue);
-            drawLineSegment(blue_point, red_point, .red);
-            drawArrow(origin, .{
+            draw.point(green_point, .green);
+            draw.point(yellow_point, .yellow);
+            draw.point(red_point, .red);
+            draw.point(blue_point, .blue);
+            draw.lineSegment(blue_point, red_point, .red);
+            draw.arrow(origin, .{
                 .e123 = 1,
                 .e023 = 0,
                 .e013 = 5,
                 .e012 = 0,
             }, 0.9, 0.4, 0.4, .gray);
             const dual_plane = geo.dual(blue_point);
-            drawPlane(dual_plane, .blue);
+            draw.plane(dual_plane, .blue);
             const plane = geo.Plane{
                 .e0 = 3,
                 .e1 = 3,
                 .e2 = 1,
                 .e3 = 1,
             };
-            drawPlane(plane, .dark_blue);
-            drawLine(meet(plane, dual_plane), .white);
-            drawMotor(mult(white_line, pink_line), .brown);
+            draw.plane(plane, .dark_blue);
+            draw.line(meet(plane, dual_plane), .white);
+            draw.motor(mult(white_line, pink_line), .brown);
         }
     }
-}
-
-pub fn drawPoint(point: Point, color: Color) void {
-    const vec: rl.Vector3 = .{
-        .x = point.e023 / point.e123,
-        .y = point.e013 / point.e123,
-        .z = point.e012 / point.e123,
-    };
-    rl.drawSphere(vec, 1, color);
-}
-
-const plane_distance_from_origin = 10;
-const line_len = 100;
-
-pub fn drawLine(line: geo.Line, color: Color) void {
-    var plane = geo.normalized(geo.innerProduct(
-        origin,
-        line,
-    ));
-    plane.e0 = line_len;
-    const start = meet(plane, line);
-    plane.e0 *= -1;
-    const end = meet(plane, line);
-
-    drawLineSegment(start, end, color);
-}
-
-pub fn drawPlane(plane: geo.Plane, color: Color) void {
-    const vertical_line = geo.Line{
-        .e01 = 0,
-        .e02 = 0,
-        .e03 = 0,
-
-        .e12 = 0,
-        .e13 = 1,
-        .e23 = 0,
-    };
-
-    const line_on_plane = project(plane, vertical_line);
-    drawLine(line_on_plane, color);
-
-    var horisontal_plane_down = geo.normalized(join(line_on_plane, origin));
-    horisontal_plane_down.e0 = plane_distance_from_origin / 2;
-    var horisontal_plane_up = horisontal_plane_down;
-    horisontal_plane_up.e0 *= -1;
-
-    var vertical_plane_left = geo.normalized(geo.innerProduct(line_on_plane, origin));
-    vertical_plane_left.e0 = plane_distance_from_origin / 2;
-    var vertical_plane_right = vertical_plane_left;
-    vertical_plane_right.e0 *= -1;
-
-    const points = [_]geo.Point{
-        meet(meet(horisontal_plane_up, vertical_plane_left), plane),
-        meet(meet(horisontal_plane_down, vertical_plane_left), plane),
-        meet(meet(horisontal_plane_up, vertical_plane_right), plane),
-        meet(meet(horisontal_plane_down, vertical_plane_right), plane),
-    };
-    drawTriangle(points[0..3].*, color.alpha(0.5));
-    drawTriangle(points[1..4].*, color.alpha(0.5));
-}
-
-pub fn drawMotor(motor: geo.Motor, color: Color) void {
-    drawLine(geo.truncateType(motor, geo.Line), color);
-}
-
-pub fn drawLineSegment(start: geo.Point, end: geo.Point, color: Color) void {
-    rl.drawLine3D(toRaylibPoint(start), toRaylibPoint(end), color);
-}
-
-pub fn toRaylibPoint(p: Point) rl.Vector3 {
-    return .{
-        .x = p.e023 / p.e123,
-        .y = p.e013 / p.e123,
-        .z = p.e012 / p.e123,
-    };
-}
-
-pub fn drawTriangle(points: [3]Point, color: Color) void {
-    rl.drawTriangle3D(
-        toRaylibPoint(points[0]),
-        toRaylibPoint(points[1]),
-        toRaylibPoint(points[2]),
-        color,
-    );
-    rl.drawTriangle3D(
-        toRaylibPoint(points[1]),
-        toRaylibPoint(points[0]),
-        toRaylibPoint(points[2]),
-        color,
-    );
-}
-
-pub fn drawArrow(position: Point, end: Point, headPart: f32, headRadius: f32, lineThickness: f32, color: Color) void {
-    const headPos = geo.lerp(
-        geo.normalized(position),
-        geo.normalized(end),
-        headPart,
-    );
-    rl.drawCylinderEx(toRaylibPoint(position), toRaylibPoint(headPos), lineThickness / 2, lineThickness / 2, 8, color);
-
-    rl.drawCylinderEx(toRaylibPoint(headPos), toRaylibPoint(end), headRadius, 0, 8, color);
 }

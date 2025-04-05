@@ -32,115 +32,115 @@ pub const Basis = enum {
 };
 
 pub const Scalar = extern struct {
-    e: f32,
+    e: f32 = 0,
 };
 
 pub const PseudoScalar = extern struct {
-    e0123: f32,
+    e0123: f32 = 0,
 };
 
 /// Also known as 1-vector
 pub const Plane = extern struct {
-    e0: f32,
+    e0: f32 = 0,
 
-    e1: f32,
-    e2: f32,
-    e3: f32,
+    e1: f32 = 0,
+    e2: f32 = 0,
+    e3: f32 = 0,
 };
 
 /// Also known as 2-vector
 pub const Line = extern struct {
-    e01: f32,
-    e02: f32,
-    e03: f32,
+    e01: f32 = 0,
+    e02: f32 = 0,
+    e03: f32 = 0,
 
-    e13: f32,
-    e23: f32,
-    e12: f32,
+    e23: f32 = 0,
+    e13: f32 = 0,
+    e12: f32 = 0,
 };
 
 /// Also known as 3-vector
 pub const Point = extern struct {
-    e123: f32,
+    e123: f32 = 0,
 
     /// x
-    e023: f32,
+    e023: f32 = 0,
     /// y
-    e013: f32,
+    e013: f32 = 0,
     /// z
-    e012: f32,
+    e012: f32 = 0,
 };
 
 /// Also known as `quaternion`
 pub const Rotor = extern struct {
-    e: f32,
+    e: f32 = 0,
 
-    e12: f32,
-    e13: f32,
-    e23: f32,
+    e12: f32 = 0,
+    e13: f32 = 0,
+    e23: f32 = 0,
 };
 
 /// Also known as `dual quaternion`
 pub const Motor = extern struct {
-    e: f32,
+    e: f32 = 0,
 
-    e23: f32,
-    e13: f32,
-    e12: f32,
+    e23: f32 = 0,
+    e13: f32 = 0,
+    e12: f32 = 0,
 
-    e01: f32,
-    e02: f32,
-    e03: f32,
+    e01: f32 = 0,
+    e02: f32 = 0,
+    e03: f32 = 0,
 
-    e0123: f32,
+    e0123: f32 = 0,
 };
 
 pub const TwoReflection = extern struct {
-    e: f32,
+    e: f32 = 0,
 
-    e23: f32,
-    e13: f32,
-    e12: f32,
+    e23: f32 = 0,
+    e13: f32 = 0,
+    e12: f32 = 0,
 
-    e01: f32,
-    e02: f32,
-    e03: f32,
+    e01: f32 = 0,
+    e02: f32 = 0,
+    e03: f32 = 0,
 };
 
 pub const Translator = extern struct {
-    e: f32,
+    e: f32 = 0,
 
-    e01: f32,
-    e02: f32,
-    e03: f32,
+    e01: f32 = 0,
+    e02: f32 = 0,
+    e03: f32 = 0,
 };
 
 // No idea how to name it properly but it has both plane and point parts.
 pub const PointPlane = extern struct {
-    e0: f32,
+    e0: f32 = 0,
 
-    e1: f32,
-    e2: f32,
-    e3: f32,
+    e1: f32 = 0,
+    e2: f32 = 0,
+    e3: f32 = 0,
 
-    e023: f32,
-    e013: f32,
-    e012: f32,
+    e023: f32 = 0,
+    e013: f32 = 0,
+    e012: f32 = 0,
 
-    e123: f32,
+    e123: f32 = 0,
 };
 
 // No idea how to name it properly but it has both plane and point parts.
 pub const AThing = extern struct {
-    e0: f32,
+    e0: f32 = 0,
 
-    e1: f32,
-    e2: f32,
-    e3: f32,
+    e1: f32 = 0,
+    e2: f32 = 0,
+    e3: f32 = 0,
 
-    e023: f32,
-    e013: f32,
-    e012: f32,
+    e023: f32 = 0,
+    e013: f32 = 0,
+    e012: f32 = 0,
 };
 
 pub const Component = struct {
@@ -315,9 +315,9 @@ pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
     return truncateType(geomProduct(innerProduct(lhs, rhs), lhs), @TypeOf(rhs));
 }
 
-pub fn sandwich(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
-    const result = scale(geomProduct(lhs, geomProduct(rhs, reverse(lhs))), -1);
-    return truncateType(result, @TypeOf(rhs));
+pub fn sandwich(transform: anytype, thing: anytype) @TypeOf(thing) {
+    const result = geomProduct(transform, geomProduct(thing, reverse(transform)));
+    return truncateType(result, @TypeOf(thing));
 }
 
 // TODO: perf even tho we skip some componets which are 0 we would still gane them in TypeFromComponents. Do something about it.
@@ -449,23 +449,48 @@ pub fn truncateType(source: anytype, T: type) T {
 }
 
 pub fn sqrt(value: anytype) @TypeOf(value) {
+    // TODO: something is not right here
+    const sign: f32 = if (value.e < 0) -1 else 1;
     var normalized_value = normalized(value);
-    normalized_value.e += 1;
-    return normalized_value;
+    normalized_value.e += sign;
+    return normalized(normalized_value);
 }
+// pub fn log(r: Motor) Line {
+//     if (r.e == 1) return .{
+//         .e01 = r.e01,
+//         .e02 = r.e02,
+//         .e03 = r.e03,
+//         .e12 = 0,
+//         .e13 = 0,
+//         .e23 = 0,
+//     };
 
-// pub fn log(motor: Motor) Line {
-//     @setEvalBranchQuota(10000);
-//     const scalar_part = motor.e;
-//     const a = 1 / (1 - scalar_part * scalar_part);
-//     const b = @sqrt(a) * std.math.acos(scalar_part);
-//     const c = a * dual(motor).e * (1 - b * scalar_part);
+//     const a = 1 / (1 - r.e * r.e); // inv squared length
+//     const b = std.math.acos(r.e0) * @sqrt(a); // rotation scale
+//     const c = a * r.e0123 * (1 - r.e); // translation scale
+//     // function log(r) {
+//     //   if (r[0]==1) return bivector(r[1],r[2],r[3],0,0,0);
+//     //   var a = 1/(1 - r[0]*r[0]),                 // inv squared length.
+//     //       b = acos(r[0])*sqrt(a),                // rotation scale
+//     //       c = a*r[7]*(1 - r[0]*b);               // translation scale
+//     //   return bivector( c*r[6] + b*r[1], c*r[5] + b*r[2], c*r[4] + b*r[3], b*r[4], b*r[5], b*r[6] );
+//     // }
+//     //
 
-//     const result = add(scale(selectGrade(motor, 2), b), geomProduct(scale(selectGrade(motor, 2), c), PseudoScalar{
-//         .e0123 = 1,
-//     }));
+//     // pub const Line = extern struct {
+//     //     e01: f32,
+//     //     e02: f32,
+//     //     e03: f32,
 
-//     return result;
+//     //     e23: f32,
+//     //     e13: f32,
+//     //     e12: f32,
+//     // };
+//     // return .{
+//     //     .e01 = c * r.e12 + b * r.e23,
+//     //     .e02 = ,
+//     //     .e03 = c
+//     // };
 // }
 
 pub fn exp(bivector: Line) Motor {
@@ -490,7 +515,7 @@ pub fn exp(bivector: Line) Motor {
     return .{
         .e = c,
         .e01 = s * bivector.e01 + t * bivector.e23,
-        .e02 = s * bivector.e02 + t * -bivector.e13,
+        .e02 = s * bivector.e02 - t * bivector.e13,
         .e03 = s * bivector.e03 + t * bivector.e12,
         .e12 = s * bivector.e12,
         .e13 = s * bivector.e13,
