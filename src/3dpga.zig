@@ -246,14 +246,14 @@ pub fn gradeOf(value: type) comptime_int {
 
 pub fn Meet(Left: type, Right: type) type {
     return SelectGrade(
-        GeomProduct(Left, Right),
+        Product(Left, Right),
         (gradeOf(Left) + gradeOf(Right)) % @typeInfo(Basis).@"enum".fields.len,
     );
 }
 
 /// OuterProduct
 pub fn meet(lhs: anytype, rhs: anytype) Meet(@TypeOf(lhs), @TypeOf(rhs)) {
-    return selectGrade(geomProduct(lhs, rhs), (gradeOf(@TypeOf(lhs)) + gradeOf(@TypeOf(rhs))) % @typeInfo(Basis).@"enum".fields.len);
+    return selectGrade(product(lhs, rhs), (gradeOf(@TypeOf(lhs)) + gradeOf(@TypeOf(rhs))) % @typeInfo(Basis).@"enum".fields.len);
 }
 
 pub fn Dual(T: type) type {
@@ -290,14 +290,14 @@ pub fn join(lhs: anytype, rhs: anytype) Join(@TypeOf(lhs), @TypeOf(rhs)) {
 
 pub fn InnerProduct(Left: type, Right: type) type {
     return SelectGrade(
-        GeomProduct(Left, Right),
+        Product(Left, Right),
         @abs(gradeOf(Left) - gradeOf(Right)),
     );
 }
 
 pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     return selectGrade(
-        geomProduct(lhs, rhs),
+        product(lhs, rhs),
         @abs(gradeOf(@TypeOf(lhs)) - gradeOf(@TypeOf(rhs))),
     );
 }
@@ -312,16 +312,16 @@ pub fn reverse(value: anytype) @TypeOf(value) {
 }
 
 pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
-    return truncateType(geomProduct(innerProduct(lhs, rhs), lhs), @TypeOf(rhs));
+    return truncateType(product(innerProduct(lhs, rhs), lhs), @TypeOf(rhs));
 }
 
 pub fn sandwich(transform: anytype, thing: anytype) @TypeOf(thing) {
-    const result = geomProduct(transform, geomProduct(thing, reverse(transform)));
+    const result = product(transform, product(thing, reverse(transform)));
     return truncateType(result, @TypeOf(thing));
 }
 
 // TODO: perf even tho we skip some componets which are 0 we would still gane them in TypeFromComponents. Do something about it.
-pub fn GeomProduct(lhs: type, rhs: type) type {
+pub fn Product(lhs: type, rhs: type) type {
     @setEvalBranchQuota(100000);
 
     var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
@@ -343,8 +343,8 @@ pub fn GeomProduct(lhs: type, rhs: type) type {
     return TypeFromComponents(comps.slice());
 }
 
-pub fn geomProduct(lhs: anytype, rhs: anytype) GeomProduct(@TypeOf(lhs), @TypeOf(rhs)) {
-    var result = std.mem.zeroes(GeomProduct(@TypeOf(lhs), @TypeOf(rhs)));
+pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
+    var result = std.mem.zeroes(Product(@TypeOf(lhs), @TypeOf(rhs)));
 
     const L = @TypeOf(lhs);
     const R = @TypeOf(rhs);
@@ -428,7 +428,7 @@ pub fn scale(lhs: anytype, rhs: f32) @TypeOf(lhs) {
 }
 
 pub fn norm(value: anytype) f32 {
-    const result = geomProduct(value, reverse(value));
+    const result = product(value, reverse(value));
     return @sqrt(result.e);
 }
 
