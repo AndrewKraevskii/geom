@@ -130,8 +130,7 @@ pub const PointPlane = extern struct {
     e123: f32 = 0,
 };
 
-// No idea how to name it properly but it has both plane and point parts.
-pub const AThing = extern struct {
+pub const RotationAroundLine = extern struct {
     e0: f32 = 0,
 
     e1: f32 = 0,
@@ -148,9 +147,7 @@ pub const Component = struct {
 
     pub fn format(
         self: @This(),
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.Io.Writer,
     ) !void {
         try writer.writeByte('e');
         var iter = self.comps.iterator();
@@ -221,13 +218,14 @@ pub fn components(T: type) []Component {
 }
 
 pub fn SelectGrade(T: type, grade: comptime_int) type {
-    var comps: std.BoundedArray(Component, components(T).len) = .{};
+    var buffer: [components(T).len]Component = undefined;
+    var comps: std.ArrayList(Component) = .initBuffer(&buffer);
     for (components(T)) |component| {
         if (component.grade() == grade) {
             comps.appendAssumeCapacity(component);
         }
     }
-    return TypeFromComponents(comps.slice());
+    return TypeFromComponents(comps.items);
 }
 
 pub fn selectGrade(value: anytype, grade: comptime_int) SelectGrade(@TypeOf(value), grade) {
@@ -269,7 +267,7 @@ pub fn dual(value: anytype) Dual(@TypeOf(value)) {
 
     inline for (@typeInfo(@TypeOf(result)).@"struct".fields) |field| {
         const comp = comptime Component.fromString(field.name).dual();
-        const name = comptime std.fmt.comptimePrint("{}", .{comp});
+        const name = comptime std.fmt.comptimePrint("{f}", .{comp});
 
         if (comptime comp.grade() == 3) {
             @field(result, field.name) = -@field(value, name);
@@ -323,8 +321,8 @@ pub fn sandwich(transform: anytype, thing: anytype) @TypeOf(thing) {
 // TODO: perf even tho we skip some componets which are 0 we would still gane them in TypeFromComponents. Do something about it.
 pub fn Product(lhs: type, rhs: type) type {
     @setEvalBranchQuota(100000);
-
-    var comps: std.BoundedArray(Component, @typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len) = .{};
+    var buffer: [@typeInfo(lhs).@"struct".fields.len * @typeInfo(rhs).@"struct".fields.len]Component = undefined;
+    var comps: std.ArrayList(Component) = .initBuffer(&buffer);
 
     inline for (components(lhs)) |first_e| {
         inline for (components(rhs)) |second_e| {
@@ -334,13 +332,13 @@ pub fn Product(lhs: type, rhs: type) type {
                 continue;
             }
 
-            for (comps.slice()) |comp| {
+            for (comps.items) |comp| {
                 if (std.meta.eql(comp, res)) break;
             } else comps.appendAssumeCapacity(res);
         }
     }
 
-    return TypeFromComponents(comps.slice());
+    return TypeFromComponents(comps.items);
 }
 
 pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
@@ -356,7 +354,7 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
             const res, const sign = comptime first_e.mult(second_e);
             if (comptime sign == 0) continue;
 
-            const name = std.fmt.comptimePrint("{}", .{res});
+            const name = std.fmt.comptimePrint("{f}", .{res});
 
             @field(result, name) =
                 @mulAdd(
@@ -389,7 +387,7 @@ pub fn TypeFromComponents(comps: []const Component) type {
         Scalar,
         PseudoScalar,
         PointPlane,
-        AThing,
+        RotationAroundLine,
     };
 
     type: for (types) |T| {
@@ -406,7 +404,7 @@ pub fn TypeFromComponents(comps: []const Component) type {
 
     var res: []const u8 = "";
     for (comps) |comp| {
-        res = res ++ std.fmt.comptimePrint(" {}", .{comp});
+        res = res ++ std.fmt.comptimePrint(" {f}", .{comp});
     }
     @compileError("Got component with this components. Provide type to store them" ++ res);
 }
@@ -450,7 +448,7 @@ pub fn truncateType(source: anytype, T: type) T {
 
 pub fn sqrt(value: anytype) @TypeOf(value) {
     // TODO: something is not right here
-    const sign: f32 = if (value.e < 0) -1 else 1;
+    const sign: f32 = std.math.sign(value.e);
     var normalized_value = normalized(value);
     normalized_value.e += sign;
     return normalized(normalized_value);

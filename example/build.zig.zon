@@ -9,8 +9,9 @@
             .path = "..",
         },
         .raylib = .{
-            .url = "git+https://github.com/Not-Nik/raylib-zig.git#d4fc514d54a3b37b9b3e4f4983f611c3469e8c2a",
-            .hash = "raylib_zig-5.6.0-dev-KE8REHguBQAE0xoNkra7mtEqr8cCZHk7k_03txLZB-cZ",
+            // .url = "git+https://github.com/Not-Nik/raylib-zig.git#d4fc514d54a3b37b9b3e4f4983f611c3469e8c2a",
+            // .hash = "raylib_zig-5.6.0-dev-KE8REHguBQAE0xoNkra7mtEqr8cCZHk7k_03txLZB-cZ",
+            .path = "../../raylib-zig",
         },
     },
 
