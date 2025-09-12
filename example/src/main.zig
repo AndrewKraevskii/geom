@@ -42,15 +42,15 @@ pub fn main() !void {
 
     var red_point: Point = .{
         .e123 = 1,
-        .e012 = 0,
-        .e023 = 1,
-        .e013 = 1,
+        .e012 = 3,
+        .e023 = -1,
+        .e013 = -4,
     };
     var blue_point: Point = .{
         .e123 = 1,
         .e012 = 0,
-        .e023 = 1,
-        .e013 = 1,
+        .e023 = 7,
+        .e013 = -9,
     };
 
     while (!rl.windowShouldClose()) {
@@ -105,11 +105,9 @@ pub fn main() !void {
                 geo.normalized(white_line),
                 geo.normalized(join(blue_point, red_point)),
                 0.5,
-                // @floatCast(@sin(rl.getTime())),
             );
 
             const green_point = sandwich(
-                // mult(white_line, pink_line),
                 geo.exp(
                     geo.scale(geo.normalized(pink_line), @floatCast(rl.getTime())),
                 ),

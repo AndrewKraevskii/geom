@@ -1,5 +1,33 @@
 const std = @import("std");
 
+const Sign = enum(i2) {
+    @"-1" = -1,
+    @"0" = 0,
+    @"1" = 1,
+
+    pub fn float(s: Sign, Float: type) Float {
+        return @floatFromInt(@intFromEnum(s));
+    }
+
+    pub fn mult(s: Sign, other: Sign) Sign {
+        const lhs = @intFromEnum(s);
+        const rhs = @intFromEnum(other);
+        return @enumFromInt(lhs * rhs);
+    }
+
+    test mult {
+        try std.testing.expectEqual(Sign.@"0", Sign.@"-1".mult(.@"0"));
+        try std.testing.expectEqual(Sign.@"-1", Sign.@"-1".mult(.@"1"));
+        try std.testing.expectEqual(Sign.@"1", Sign.@"-1".mult(.@"-1"));
+        try std.testing.expectEqual(Sign.@"0", Sign.@"1".mult(.@"0"));
+        try std.testing.expectEqual(Sign.@"1", Sign.@"1".mult(.@"1"));
+        try std.testing.expectEqual(Sign.@"-1", Sign.@"1".mult(.@"-1"));
+        try std.testing.expectEqual(Sign.@"0", Sign.@"0".mult(.@"0"));
+        try std.testing.expectEqual(Sign.@"0", Sign.@"0".mult(.@"1"));
+        try std.testing.expectEqual(Sign.@"0", Sign.@"0".mult(.@"-1"));
+    }
+};
+
 pub const Basis = enum {
     e0,
     e1,
@@ -17,12 +45,12 @@ pub const Basis = enum {
         return @enumFromInt(num);
     }
 
-    pub fn square(b: Basis) i2 {
+    pub fn square(b: Basis) Sign {
         return switch (b) {
-            .e0 => 0,
-            .e1 => 1,
-            .e2 => 1,
-            .e3 => 1,
+            .e0 => .@"0",
+            .e1 => .@"1",
+            .e2 => .@"1",
+            .e3 => .@"1",
         };
     }
 
@@ -95,18 +123,6 @@ pub const Motor = extern struct {
     e0123: f32 = 0,
 };
 
-pub const TwoReflection = extern struct {
-    e: f32 = 0,
-
-    e23: f32 = 0,
-    e13: f32 = 0,
-    e12: f32 = 0,
-
-    e01: f32 = 0,
-    e02: f32 = 0,
-    e03: f32 = 0,
-};
-
 pub const Translator = extern struct {
     e: f32 = 0,
 
@@ -130,20 +146,10 @@ pub const PointPlane = extern struct {
     e123: f32 = 0,
 };
 
-pub const RotationAroundLine = extern struct {
-    e0: f32 = 0,
-
-    e1: f32 = 0,
-    e2: f32 = 0,
-    e3: f32 = 0,
-
-    e023: f32 = 0,
-    e013: f32 = 0,
-    e012: f32 = 0,
-};
-
-pub const Component = struct {
+const Component = struct {
     comps: std.EnumSet(Basis),
+
+    const empty: Component = .{ .comps = .initEmpty() };
 
     pub fn format(
         self: @This(),
@@ -156,17 +162,9 @@ pub const Component = struct {
         }
     }
 
-    pub fn fromVecs(vecs: []const Basis) Component {
-        var res: Component = .{ .comps = .initEmpty() };
-        for (vecs) |vec| {
-            res.comps.insert(vec);
-        }
-        return res;
-    }
-
-    pub fn mult(lhs: Component, rhs: Component) struct { Component, i2 } {
+    pub fn mult(lhs: Component, rhs: Component) struct { Component, Sign } {
         const both = lhs.comps.intersectWith(rhs.comps);
-        var sign: i2 = 1;
+        var sign: Sign = .@"1";
 
         var mask: Component = .{ .comps = .initEmpty() };
         for (std.enums.values(Basis)) |base_vec| {
@@ -176,8 +174,8 @@ pub const Component = struct {
 
             const change_sign = lhs.comps.differenceWith(mask.comps).count() % 2 != 0;
 
-            if (change_sign) sign *= -1;
-            if (both.contains(base_vec)) sign *= base_vec.square();
+            if (change_sign) sign = sign.mult(.@"-1");
+            if (both.contains(base_vec)) sign = sign.mult(base_vec.square());
         }
         return .{ .{ .comps = lhs.comps.xorWith(rhs.comps) }, sign };
     }
@@ -190,14 +188,6 @@ pub const Component = struct {
             res.comps.insert(.fromNum(digit - '0'));
         }
         return res;
-    }
-
-    pub fn less(lhs: Component, rhs: Component) bool {
-        for (std.enums.values(Basis)) |base_vec| {
-            if (!lhs.comps.contains(base_vec) and rhs.comps.contains(base_vec)) return true;
-            if (lhs.comps.contains(base_vec) and !rhs.comps.contains(base_vec)) return false;
-        }
-        return false;
     }
 
     pub fn grade(c: Component) usize {
@@ -309,6 +299,25 @@ pub fn reverse(value: anytype) @TypeOf(value) {
     return copy;
 }
 
+test reverse {
+    try std.testing.expectEqual(Motor{
+        .e = 1,
+        .e12 = -1,
+        .e0123 = 1,
+    }, reverse(Motor{
+        .e = 1,
+        .e12 = 1,
+        .e0123 = 1,
+    }));
+    try std.testing.expectEqual(PointPlane{
+        .e0 = 1,
+        .e012 = -1,
+    }, reverse(PointPlane{
+        .e0 = 1,
+        .e012 = 1,
+    }));
+}
+
 pub fn project(lhs: anytype, rhs: anytype) @TypeOf(rhs) {
     return truncateType(product(innerProduct(lhs, rhs), lhs), @TypeOf(rhs));
 }
@@ -328,7 +337,7 @@ pub fn Product(lhs: type, rhs: type) type {
         inline for (components(rhs)) |second_e| {
             const res, const sign = first_e.mult(second_e);
 
-            if (sign == 0) {
+            if (sign == .@"0") {
                 continue;
             }
 
@@ -352,7 +361,7 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
             const first_e = comptime Component.fromString(lhf.name);
             const second_e = comptime Component.fromString(rhf.name);
             const res, const sign = comptime first_e.mult(second_e);
-            if (comptime sign == 0) continue;
+            if (comptime sign == .@"0") continue;
 
             const name = std.fmt.comptimePrint("{f}", .{res});
 
@@ -360,7 +369,7 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
                 @mulAdd(
                     f32,
                     @field(lhs, lhf.name),
-                    @field(rhs, rhf.name) * @as(f32, @floatFromInt(sign)),
+                    @field(rhs, rhf.name) * sign.float(f32),
                     @field(result, name),
                 );
         }
@@ -382,12 +391,10 @@ pub fn TypeFromComponents(comps: []const Component) type {
         Point,
         Rotor,
         Motor,
-        TwoReflection,
         Translator,
         Scalar,
         PseudoScalar,
         PointPlane,
-        RotationAroundLine,
     };
 
     type: for (types) |T| {
@@ -434,6 +441,51 @@ pub fn normalized(value: anytype) @TypeOf(value) {
     return scale(value, 1 / norm(value));
 }
 
+test normalized {
+    try std.testing.expectEqual(Scalar{
+        .e = 1,
+    }, normalized(Scalar{
+        .e = 2,
+    }));
+    try std.testing.expectEqual(Scalar{
+        .e = -1,
+    }, normalized(Scalar{
+        .e = -2,
+    }));
+
+    try std.testing.expectEqual(Plane{
+        .e1 = 0.7071067691,
+        .e2 = 0.7071067691,
+    }, normalized(Plane{
+        .e1 = 1,
+        .e2 = 1,
+    }));
+
+    try std.testing.expectEqual(Plane{
+        .e1 = -0.7071067691,
+        .e2 = -0.7071067691,
+    }, normalized(Plane{
+        .e1 = -1,
+        .e2 = -1,
+    }));
+
+    try std.testing.expectEqual(Motor{
+        .e = 1,
+        .e01 = 1,
+    }, normalized(Motor{
+        .e = 1,
+        .e01 = 1,
+    }));
+
+    try std.testing.expectEqual(Motor{
+        .e = 0.7071067691,
+        .e12 = 0.7071067691,
+    }, normalized(Motor{
+        .e = 1,
+        .e12 = 1,
+    }));
+}
+
 pub fn lerp(lhs: anytype, rhs: anytype, t: f32) @TypeOf(lhs, rhs) {
     return add(scale(lhs, 1 - t), scale(rhs, t));
 }
@@ -453,6 +505,7 @@ pub fn sqrt(value: anytype) @TypeOf(value) {
     normalized_value.e += sign;
     return normalized(normalized_value);
 }
+
 // pub fn log(r: Motor) Line {
 //     if (r.e == 1) return .{
 //         .e01 = r.e01,
@@ -520,4 +573,48 @@ pub fn exp(bivector: Line) Motor {
         .e23 = s * bivector.e23,
         .e0123 = m * s,
     };
+}
+
+test product {
+    const red_point: Point = .{
+        .e123 = 1,
+        .e012 = 3,
+        .e023 = -1,
+        .e013 = -4,
+    };
+    const blue_point: Point = .{
+        .e123 = 1,
+        .e012 = 0,
+        .e023 = 7,
+        .e013 = -9,
+    };
+    const white_line = join(blue_point, Point{
+        .e123 = 1,
+        .e023 = 0,
+        .e013 = 1,
+        .e012 = 0,
+    });
+
+    const pink_line = lerp(
+        normalized(white_line),
+        normalized(join(blue_point, red_point)),
+        0.5,
+    );
+
+    const green_point = sandwich(
+        exp(
+            scale(normalized(pink_line), 1),
+        ),
+        red_point,
+    );
+    try std.testing.expectEqualDeep(Point{
+        .e123 = 0.99999994,
+        .e023 = 1.7982194,
+        .e013 = -0.9905544,
+        .e012 = 2.6058142,
+    }, green_point);
+}
+
+test {
+    _ = Sign;
 }
