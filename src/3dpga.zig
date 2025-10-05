@@ -200,11 +200,13 @@ const Component = struct {
 };
 
 pub fn components(T: type) []Component {
-    var comps: [@typeInfo(T).@"struct".fields.len]Component = undefined;
-    inline for (&comps, @typeInfo(T).@"struct".fields) |*comp, field| {
-        comp.* = Component.fromString(field.name);
-    }
-    return &comps;
+    return comptime blk: {
+        var comps: [@typeInfo(T).@"struct".fields.len]Component = undefined;
+        for (&comps, @typeInfo(T).@"struct".fields) |*comp, field| {
+            comp.* = Component.fromString(field.name);
+        }
+        break :blk &comps;
+    };
 }
 
 pub fn SelectGrade(T: type, grade: comptime_int) type {
