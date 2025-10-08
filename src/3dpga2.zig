@@ -438,10 +438,9 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
     var result: Result = .{};
     inline for (@typeInfo(Left).@"struct".fields) |left| {
         inline for (@typeInfo(Right).@"struct".fields) |right| {
-            const left_list: Blade = comptime bladeFromString(left.name);
-            const right_list: Blade = comptime bladeFromString(right.name);
-
             const sign, const result_field_name = comptime sign: {
+                const left_list: Blade = bladeFromString(left.name);
+                const right_list: Blade = bladeFromString(right.name);
                 var both = blk: {
                     const both: Blade = left_list ++ right_list;
                     break :blk both[0..both.len].*;
@@ -451,9 +450,32 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
                 const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade);
                 break :sign .{ sign.mult(sign2), result_field_name };
             };
-            const product_of_two_blades = @field(lhs, left.name) * @field(rhs, right.name);
 
-            @field(result, result_field_name) += product_of_two_blades * sign.float(f32);
+            // PERF: test if llvm can figure it out on is own.
+            if (comptime std.meta.fieldInfo(Left, @field(std.meta.FieldEnum(Left), left.name)).is_comptime and
+                std.meta.fieldInfo(Right, @field(std.meta.FieldEnum(Right), right.name)).is_comptime)
+            {
+                const left_value = comptime @field(lhs, left.name);
+                const right_value = comptime @field(rhs, right.name);
+
+                @field(result, result_field_name) += comptime (left_value * right_value * sign.float(f32));
+                continue;
+            }
+            switch (sign) {
+                .@"1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    @field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                .@"-1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    -@field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                else => comptime unreachable,
+            }
         }
     }
     return result;
