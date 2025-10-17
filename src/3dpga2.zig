@@ -1,4 +1,5 @@
-//! geometric relationships                                               expression
+//! Following ../3D PGA Cheat Sheet.pdf
+//!
 //! -----------------------------------------------------------------------------------------
 //! Plane     perpendicular to   plane p   and containing     line L      p · L
 //! Point     intersection of    plane p   and                line L      p ∧ L
@@ -41,6 +42,7 @@ const Basis = enum(u2) {
             .e3 => .@"1",
         };
     }
+    const pseudo_vector: Blade = &.{ .e0, .e1, .e2, .e3 };
 };
 
 pub fn point(x: f32, y: f32, z: f32) primitive.Point {
@@ -152,7 +154,7 @@ test bladeFromString {
     try std.testing.expectEqualSlices(Basis, &[_]Basis{ .e1, .e2, .e0, .e3 }, bladeFromString("e1203"));
 }
 
-pub fn getFieldNameFromBlade(comptime T: type, comptime blade: Blade) struct { Sign, []const u8 } {
+pub fn getFieldNameFromBlade(comptime T: type, comptime blade: Blade) ?struct { Sign, []const u8 } {
     inline for (@typeInfo(T).@"struct".fields) |field| {
         if (comptime same(bladeFromString(field.name), blade)) {
             if (sameSign(bladeFromString(field.name), blade)) {
@@ -162,15 +164,21 @@ pub fn getFieldNameFromBlade(comptime T: type, comptime blade: Blade) struct { S
             }
         }
     }
-    @compileError(std.fmt.comptimePrint("Field matching blade {any} not found in type {any}", .{ blade, T }));
+
+    return null;
 }
 
 test getFieldNameFromBlade {
     {
-        try std.testing.expectEqual(.@"-1", getFieldNameFromBlade(primitive.Motor, &.{ .e1, .e0 })[0]);
-        try std.testing.expectEqual(.@"1", getFieldNameFromBlade(primitive.Motor, &.{ .e0, .e2 })[0]);
-        try std.testing.expectEqual(.@"1", getFieldNameFromBlade(primitive.Motor, &.{ .e0, .e3, .e1, .e2 })[0]);
-        try std.testing.expectEqual(.@"-1", getFieldNameFromBlade(primitive.Motor, &.{ .e3, .e0, .e1, .e2 })[0]);
+        try std.testing.expectEqual(.@"-1", getFieldNameFromBlade(primitive.Motor, &.{ .e1, .e0 }).?[0]);
+        try std.testing.expectEqual(.@"1", getFieldNameFromBlade(primitive.Motor, &.{ .e0, .e2 }).?[0]);
+        try std.testing.expectEqual(.@"1", getFieldNameFromBlade(primitive.Motor, &.{ .e0, .e3, .e1, .e2 }).?[0]);
+        try std.testing.expectEqual(.@"-1", getFieldNameFromBlade(primitive.Motor, &.{ .e3, .e0, .e1, .e2 }).?[0]);
+        try std.testing.expectEqual(@as(?struct { Sign, []const u8 }, null), getFieldNameFromBlade(primitive.Motor, &.{
+            .e3,
+            .e0,
+            .e1,
+        }));
     }
 }
 
@@ -447,7 +455,7 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
                 };
                 const sign = sortGetSign(&both);
                 const result_blade = collapseBlade(&both) orelse continue;
-                const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade);
+                const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade).?;
                 break :sign .{ sign.mult(sign2), result_field_name };
             };
 
@@ -544,3 +552,202 @@ test product {
         ));
     }
 }
+
+pub fn reduce(comptime T: type, value: anytype) T {
+    var result: T = .{};
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+        const blades = comptime bladeFromString(field.name);
+        const sign, const field_name = comptime getFieldNameFromBlade(T, blades) orelse continue;
+
+        @field(result, field_name) = sign.float(f32) * @field(value, field.name);
+    }
+    return result;
+}
+
+test reduce {
+    try std.testing.expectEqual(primitive.Translator{
+        .@"1" = 1,
+        .e01 = 1,
+    }, reduce(primitive.Translator, primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    }));
+    try std.testing.expectEqual(primitive.Translator{
+        .@"1" = 1,
+        .e01 = 0,
+    }, reduce(primitive.Translator, .{
+        .@"1" = 1,
+    }));
+}
+
+/// Changes sign of every basis vector in multivector.
+///
+/// For blades with even number of basis vector it is nope.
+pub fn involute(value: anytype) @TypeOf(value) {
+    var copy = value;
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+        if (comptime bladeFromString(field.name).len % 2 == 1) {
+            @field(copy, field.name) *= -1;
+        }
+    }
+    return copy;
+}
+
+test involute {
+    try std.testing.expectEqual(primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    }, involute(primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    }));
+    try std.testing.expectEqual(primitive.Point{
+        .e012 = -1,
+        .e013 = -1,
+        .e123 = 1,
+    }, involute(primitive.Point{
+        .e012 = 1,
+        .e013 = 1,
+        .e123 = -1,
+    }));
+}
+
+/// Flips basis vectors order in blades.
+///
+/// Effect is changing sign of bivector and trivector part.
+pub fn reverse(value: anytype) @TypeOf(value) {
+    var copy = value;
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+        const same_sign = comptime blk: {
+            const blade = bladeFromString(field.name);
+            var reversed = blade[0..blade.len].*;
+
+            std.mem.reverse(Basis, &reversed);
+            break :blk sameSign(blade, &reversed);
+        };
+        if (comptime !same_sign) {
+            @field(copy, field.name) *= -1;
+        }
+    }
+    return copy;
+}
+
+test reverse {
+    try std.testing.expectEqual(primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = -1,
+    }, reverse(primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    }));
+    try std.testing.expectEqual(primitive.Point{
+        .e012 = -1,
+        .e013 = -1,
+        .e123 = 1,
+    }, involute(primitive.Point{
+        .e012 = 1,
+        .e013 = 1,
+        .e123 = -1,
+    }));
+}
+
+pub fn norm(value: anytype) f32 {
+    const result = product(value, reverse(value));
+
+    return @sqrt(result.@"1");
+}
+
+test norm {
+    try std.testing.expectEqual(@sqrt(@as(f32, 119)), norm(primitive.Motor{
+        .@"1" = 10,
+        .e12 = 3,
+        .e31 = 1,
+        .e03 = 0,
+        .e23 = 3,
+        .e01 = 1,
+        .e02 = 3,
+        .e0123 = 3,
+    }));
+}
+
+fn xorBlade(comptime values: Blade, comptime blade: Blade) Blade {
+    return comptime blk: {
+        std.debug.assert(values.len <= blade.len);
+        find: for (values) |value| {
+            for (blade) |b| {
+                if (b == value) continue :find;
+            }
+            // TODO: give better error message
+            std.debug.print("uses value outside of allowed range", .{});
+        }
+
+        var result: Blade = &.{};
+        find: for (blade) |b| {
+            for (values) |v| {
+                if (b == v) continue :find;
+            }
+
+            result = result ++ &[1]Basis{b};
+        }
+
+        break :blk result;
+    };
+}
+
+test xorBlade {
+    try std.testing.expectEqualSlices(
+        Basis,
+        &.{ .e0, .e2, .e3 },
+        xorBlade(&.{.e1}, &.{ .e0, .e1, .e2, .e3 }),
+    );
+    try std.testing.expectEqualSlices(
+        Basis,
+        &.{ .e0, .e1, .e2, .e3 },
+        xorBlade(&.{}, &.{ .e0, .e1, .e2, .e3 }),
+    );
+    try std.testing.expectEqualSlices(
+        Basis,
+        &.{},
+        xorBlade(&.{ .e0, .e1, .e2, .e3 }, &.{ .e0, .e1, .e2, .e3 }),
+    );
+}
+
+fn DualWithBasis(comptime T: type, comptime base: Blade) type {
+    var blades: []const Blade = &.{};
+    for (@typeInfo(T).@"struct".fields) |field| {
+        blades = blades ++ &[1]Blade{xorBlade(bladeFromString(field.name), base)};
+    }
+    return SelectTypeContainingBlades(
+        blades,
+        typesFromNamespace(primitive),
+    );
+}
+
+test DualWithBasis {
+    try std.testing.expectEqual(
+        primitive.Plane,
+        DualWithBasis(
+            primitive.Point,
+            Basis.pseudo_vector,
+        ),
+    );
+}
+
+// pub fn dual(value: anytype) DualWithBasis(
+//     @TypeOf(value),
+//     Basis.pseudo_vector,
+// ) {
+//     var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
+//     inline for (@typeInfo(value).@"struct".fields) |field| {
+//         field.name
+//         const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), blades) orelse continue;
+
+//         @field()
+
+//     }
+// }
