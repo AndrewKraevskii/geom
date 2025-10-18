@@ -129,6 +129,35 @@ pub const primitive = struct {
 
         e0123: f32 = 0,
     };
+
+    pub const Multivector = struct {
+        @"1": f32 = 0,
+
+        e0: f32 = 0,
+
+        e1: f32 = 0,
+        e2: f32 = 0,
+        e3: f32 = 0,
+
+        e01: f32 = 0,
+        e02: f32 = 0,
+        e03: f32 = 0,
+
+        e12: f32 = 0,
+        e23: f32 = 0,
+        e31: f32 = 0,
+
+        e123: f32 = 0,
+
+        /// x
+        e032: f32 = 0,
+        /// y
+        e013: f32 = 0,
+        /// z
+        e012: f32 = 0,
+
+        e0123: f32 = 0,
+    };
 };
 
 const Blade = []const Basis;
@@ -403,7 +432,17 @@ test collapseBlade {
     }
 }
 
-pub fn Product(Left: type, Right: type) type {
+pub fn BladeProduct(lhs: Blade, rhs: Blade) ?struct { Sign, Blade } {
+    var both = blk: {
+        const both: Blade = lhs ++ rhs;
+        break :blk both[0..both.len].*;
+    };
+    const sign = sortGetSign(&both);
+
+    return .{ sign, collapseBlade(&both) orelse return null };
+}
+
+pub fn GeometricProduct(Left: type, Right: type) type {
     @setEvalBranchQuota(100000);
     comptime {
         var blades: []const Blade = &.{};
@@ -412,13 +451,7 @@ pub fn Product(Left: type, Right: type) type {
                 const left_list: Blade = bladeFromString(left.name);
                 const right_list: Blade = bladeFromString(right.name);
 
-                var both = blk: {
-                    const both: Blade = left_list ++ right_list;
-                    break :blk both[0..both.len].*;
-                };
-                _ = sortGetSign(&both);
-
-                blades = blades ++ &[1]Blade{collapseBlade(&both) orelse continue};
+                blades = blades ++ &[1]Blade{(BladeProduct(left_list, right_list) orelse continue)[1]};
             }
         }
         return SelectTypeContainingBlades(
@@ -428,20 +461,20 @@ pub fn Product(Left: type, Right: type) type {
     }
 }
 
-test Product {
-    try std.testing.expectEqual(primitive.Motor, Product(primitive.Motor, primitive.Motor));
-    try std.testing.expectEqual(primitive.Translator, Product(primitive.Translator, primitive.Translator));
-    try std.testing.expectEqual(primitive.Rotor, Product(primitive.Rotor, primitive.Rotor));
-    try std.testing.expectEqual(primitive.Motor, Product(primitive.Motor, primitive.Rotor));
-    try std.testing.expectEqual(primitive.Motor, Product(primitive.Translator, primitive.Rotor));
-    try std.testing.expectEqual(primitive.Motor, Product(primitive.Plane, primitive.Plane));
+test GeometricProduct {
+    try std.testing.expectEqual(primitive.Motor, GeometricProduct(primitive.Motor, primitive.Motor));
+    try std.testing.expectEqual(primitive.Translator, GeometricProduct(primitive.Translator, primitive.Translator));
+    try std.testing.expectEqual(primitive.Rotor, GeometricProduct(primitive.Rotor, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Motor, GeometricProduct(primitive.Motor, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Motor, GeometricProduct(primitive.Translator, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Motor, GeometricProduct(primitive.Plane, primitive.Plane));
 }
 
-pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
+pub fn geometricProduct(lhs: anytype, rhs: anytype) GeometricProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     const Left = @TypeOf(lhs);
     const Right = @TypeOf(rhs);
 
-    const Result = Product(@TypeOf(lhs), @TypeOf(rhs));
+    const Result = GeometricProduct(@TypeOf(lhs), @TypeOf(rhs));
 
     var result: Result = .{};
     inline for (@typeInfo(Left).@"struct".fields) |left| {
@@ -449,26 +482,12 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
             const sign, const result_field_name = comptime sign: {
                 const left_list: Blade = bladeFromString(left.name);
                 const right_list: Blade = bladeFromString(right.name);
-                var both = blk: {
-                    const both: Blade = left_list ++ right_list;
-                    break :blk both[0..both.len].*;
-                };
-                const sign = sortGetSign(&both);
-                const result_blade = collapseBlade(&both) orelse continue;
+                const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
+
                 const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade).?;
                 break :sign .{ sign.mult(sign2), result_field_name };
             };
 
-            // PERF: test if llvm can figure it out on is own.
-            if (comptime std.meta.fieldInfo(Left, @field(std.meta.FieldEnum(Left), left.name)).is_comptime and
-                std.meta.fieldInfo(Right, @field(std.meta.FieldEnum(Right), right.name)).is_comptime)
-            {
-                const left_value = comptime @field(lhs, left.name);
-                const right_value = comptime @field(rhs, right.name);
-
-                @field(result, result_field_name) += comptime (left_value * right_value * sign.float(f32));
-                continue;
-            }
             switch (sign) {
                 .@"1" => @field(result, result_field_name) = @mulAdd(
                     f32,
@@ -489,13 +508,13 @@ pub fn product(lhs: anytype, rhs: anytype) Product(@TypeOf(lhs), @TypeOf(rhs)) {
     return result;
 }
 
-test product {
-    try std.testing.expectEqual(primitive.Scalar{ .@"1" = 1 }, product(.{
+test geometricProduct {
+    try std.testing.expectEqual(primitive.Scalar{ .@"1" = 1 }, geometricProduct(.{
         .e1 = 1,
     }, .{
         .e1 = 1,
     }));
-    try std.testing.expectEqual(primitive.Scalar{ .@"1" = -10 }, product(.{
+    try std.testing.expectEqual(primitive.Scalar{ .@"1" = -10 }, geometricProduct(.{
         .e1 = 1,
     }, .{
         .e1 = -10,
@@ -506,7 +525,7 @@ test product {
         try std.testing.expectEqual(primitive.Plane{
             .e1 = -10,
             .e0 = -1,
-        }, product(
+        }, geometricProduct(
             .{
                 .e1 = 1,
             },
@@ -518,7 +537,7 @@ test product {
         try std.testing.expectEqual(primitive.Plane{
             .e1 = -10,
             .e0 = 1,
-        }, product(
+        }, geometricProduct(
             .{
                 .@"1" = -10,
                 .e01 = 1,
@@ -532,7 +551,7 @@ test product {
         // can swap numbers in field names to flip sign
         try std.testing.expectEqual(primitive.Point{
             .e012 = 1,
-        }, product(
+        }, geometricProduct(
             .{
                 .e12 = 1,
             },
@@ -542,7 +561,7 @@ test product {
         ));
         try std.testing.expectEqual(primitive.Point{
             .e012 = -1,
-        }, product(
+        }, geometricProduct(
             .{
                 .e21 = 1,
             },
@@ -649,15 +668,33 @@ test reverse {
         .e012 = -1,
         .e013 = -1,
         .e123 = 1,
-    }, involute(primitive.Point{
+    }, reverse(primitive.Point{
         .e012 = 1,
         .e013 = 1,
         .e123 = -1,
     }));
+    const random_point: primitive.Point = .{
+        .e012 = 1,
+        .e013 = 1,
+        .e123 = -1,
+    };
+
+    try std.testing.expectEqual(primitive.Translator{ .@"1" = 1 }, geometricProduct(random_point, reverse(random_point)));
+    try std.testing.expectEqual(primitive.Motor{ .@"1" = 3 }, geometricProduct(primitive.Plane{
+        .e0 = 1,
+        .e1 = 1,
+        .e2 = 1,
+        .e3 = 1,
+    }, reverse(primitive.Plane{
+        .e0 = 1,
+        .e1 = 1,
+        .e2 = 1,
+        .e3 = 1,
+    })));
 }
 
 pub fn norm(value: anytype) f32 {
-    const result = product(value, reverse(value));
+    const result = geometricProduct(value, reverse(value));
 
     return @sqrt(result.@"1");
 }
@@ -672,6 +709,23 @@ test norm {
         .e01 = 1,
         .e02 = 3,
         .e0123 = 3,
+    }));
+}
+
+pub fn iNorm(value: anytype) f32 {
+    @setEvalBranchQuota(10000);
+    const dual_value = dual(value);
+    const result = geometricProduct(dual_value, reverse(dual_value));
+
+    return @sqrt(result.@"1");
+}
+
+test iNorm {
+    try std.testing.expectEqual(@sqrt(@as(f32, 0)), iNorm(.{
+        .e1 = 1,
+    }));
+    try std.testing.expectEqual(@sqrt(@as(f32, 1)), iNorm(.{
+        .e0 = 1,
     }));
 }
 
@@ -738,16 +792,170 @@ test DualWithBasis {
     );
 }
 
-// pub fn dual(value: anytype) DualWithBasis(
-//     @TypeOf(value),
-//     Basis.pseudo_vector,
-// ) {
-//     var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
-//     inline for (@typeInfo(value).@"struct".fields) |field| {
-//         field.name
-//         const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), blades) orelse continue;
+pub fn dual(value: anytype) DualWithBasis(
+    @TypeOf(value),
+    Basis.pseudo_vector,
+) {
+    @setEvalBranchQuota(10000);
+    var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+        const blade = comptime bladeFromString(field.name);
+        const xor = comptime xorBlade(bladeFromString(field.name), Basis.pseudo_vector);
+        const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), xor) orelse continue;
+        if (comptime sameSign(blade ++ xor, Basis.pseudo_vector) == (sign == .@"1")) {
+            @field(result, field_name) = @field(value, field.name);
+        } else {
+            @field(result, field_name) = -@field(value, field.name);
+        }
+    }
 
-//         @field()
+    return result;
+}
 
-//     }
-// }
+test dual {
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        primitive.Plane{
+            .e0 = 1,
+        },
+        dual(primitive.Plane{
+            .e0 = 1,
+        }),
+    ));
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        primitive.Plane{
+            .e1 = 1,
+        },
+        dual(primitive.Plane{
+            .e1 = 1,
+        }),
+    ));
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        primitive.Plane{
+            .e2 = 1,
+        },
+        dual(primitive.Plane{
+            .e2 = 1,
+        }),
+    ));
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        primitive.Plane{
+            .e3 = 1,
+        },
+        dual(primitive.Plane{
+            .e3 = 1,
+        }),
+    ));
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        primitive.Line{
+            .e12 = 1,
+        },
+        dual(primitive.Line{
+            .e12 = 1,
+        }),
+    ));
+    try std.testing.expectEqual(primitive.Motor{
+        .e0123 = 1,
+    }, geometricProduct(
+        .{
+            .@"1" = 1,
+        },
+        dual(.{
+            .@"1" = 1,
+        }),
+    ));
+}
+
+export fn absDiff(a: usize, b: usize) usize {
+    return @max(a, b) - @min(a, b);
+}
+
+pub fn InnerProduct(Left: type, Right: type) type {
+    @setEvalBranchQuota(100000);
+    comptime {
+        var blades: []const Blade = &.{};
+        for (@typeInfo(Left).@"struct".fields) |left| {
+            for (@typeInfo(Right).@"struct".fields) |right| {
+                const left_list: Blade = bladeFromString(left.name);
+                const right_list: Blade = bladeFromString(right.name);
+                const chosen_len = absDiff(left_list.len, right_list.len);
+                const blade = (BladeProduct(left_list, right_list) orelse continue)[1];
+                if (chosen_len != blade.len) continue;
+
+                blades = blades ++ &[1]Blade{blade};
+            }
+        }
+        return SelectTypeContainingBlades(
+            blades,
+            typesFromNamespace(primitive),
+        );
+    }
+}
+
+test InnerProduct {
+    try std.testing.expectEqual(primitive.Scalar, InnerProduct(primitive.Point, primitive.Point));
+}
+
+pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @TypeOf(rhs)) {
+    const Left = @TypeOf(lhs);
+    const Right = @TypeOf(rhs);
+
+    const Result = InnerProduct(@TypeOf(lhs), @TypeOf(rhs));
+
+    var result: Result = .{};
+    inline for (@typeInfo(Left).@"struct".fields) |left| {
+        inline for (@typeInfo(Right).@"struct".fields) |right| {
+            const sign, const result_field_name = comptime sign: {
+                const left_list: Blade = bladeFromString(left.name);
+                const right_list: Blade = bladeFromString(right.name);
+                const chosen_len = absDiff(left_list.len, right_list.len);
+                const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
+                if (chosen_len != result_blade.len) continue;
+
+                const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade).?;
+                break :sign .{ sign.mult(sign2), result_field_name };
+            };
+
+            switch (sign) {
+                .@"1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    @field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                .@"-1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    -@field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                else => comptime unreachable,
+            }
+        }
+    }
+    return result;
+}
+
+test innerProduct {
+    // (e123 + e012 + 10e201 + 10) | (e123) = −1+10e123
+    try std.testing.expectEqual(primitive.Multivector{
+        .@"1" = -1,
+        .e123 = 10,
+    }, innerProduct(.{
+        .e123 = 1,
+        .e012 = 1,
+        .e201 = 10,
+        .@"1" = 10,
+    }, .{
+        .e123 = 1,
+    }));
+}
