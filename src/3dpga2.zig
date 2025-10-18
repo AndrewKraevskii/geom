@@ -443,21 +443,8 @@ pub fn BladeProduct(lhs: Blade, rhs: Blade) ?struct { Sign, Blade } {
 }
 
 pub fn GeometricProduct(Left: type, Right: type) type {
-    @setEvalBranchQuota(100000);
     comptime {
-        var blades: []const Blade = &.{};
-        for (@typeInfo(Left).@"struct".fields) |left| {
-            for (@typeInfo(Right).@"struct".fields) |right| {
-                const left_list: Blade = bladeFromString(left.name);
-                const right_list: Blade = bladeFromString(right.name);
-
-                blades = blades ++ &[1]Blade{(BladeProduct(left_list, right_list) orelse continue)[1]};
-            }
-        }
-        return SelectTypeContainingBlades(
-            blades,
-            typesFromNamespace(primitive),
-        );
+        return Product(Left, Right, .geometric);
     }
 }
 
@@ -471,41 +458,7 @@ test GeometricProduct {
 }
 
 pub fn geometricProduct(lhs: anytype, rhs: anytype) GeometricProduct(@TypeOf(lhs), @TypeOf(rhs)) {
-    const Left = @TypeOf(lhs);
-    const Right = @TypeOf(rhs);
-
-    const Result = GeometricProduct(@TypeOf(lhs), @TypeOf(rhs));
-
-    var result: Result = .{};
-    inline for (@typeInfo(Left).@"struct".fields) |left| {
-        inline for (@typeInfo(Right).@"struct".fields) |right| {
-            const sign, const result_field_name = comptime sign: {
-                const left_list: Blade = bladeFromString(left.name);
-                const right_list: Blade = bladeFromString(right.name);
-                const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
-
-                const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade).?;
-                break :sign .{ sign.mult(sign2), result_field_name };
-            };
-
-            switch (sign) {
-                .@"1" => @field(result, result_field_name) = @mulAdd(
-                    f32,
-                    @field(lhs, left.name),
-                    @field(rhs, right.name),
-                    @field(result, result_field_name),
-                ),
-                .@"-1" => @field(result, result_field_name) = @mulAdd(
-                    f32,
-                    @field(lhs, left.name),
-                    -@field(rhs, right.name),
-                    @field(result, result_field_name),
-                ),
-                else => comptime unreachable,
-            }
-        }
-    }
-    return result;
+    return product(lhs, rhs, .geometric);
 }
 
 test geometricProduct {
@@ -880,24 +833,8 @@ export fn absDiff(a: usize, b: usize) usize {
 }
 
 pub fn InnerProduct(Left: type, Right: type) type {
-    @setEvalBranchQuota(100000);
     comptime {
-        var blades: []const Blade = &.{};
-        for (@typeInfo(Left).@"struct".fields) |left| {
-            for (@typeInfo(Right).@"struct".fields) |right| {
-                const left_list: Blade = bladeFromString(left.name);
-                const right_list: Blade = bladeFromString(right.name);
-                const chosen_len = absDiff(left_list.len, right_list.len);
-                const blade = (BladeProduct(left_list, right_list) orelse continue)[1];
-                if (chosen_len != blade.len) continue;
-
-                blades = blades ++ &[1]Blade{blade};
-            }
-        }
-        return SelectTypeContainingBlades(
-            blades,
-            typesFromNamespace(primitive),
-        );
+        return Product(Left, Right, .inner);
     }
 }
 
@@ -951,6 +888,131 @@ test innerProduct {
         .@"1" = -1,
         .e123 = 10,
     }, innerProduct(.{
+        .e123 = 1,
+        .e012 = 1,
+        .e201 = 10,
+        .@"1" = 10,
+    }, .{
+        .e123 = 1,
+    }));
+}
+
+const ProductType = enum {
+    geometric,
+    inner,
+    outer,
+};
+
+pub fn Product(Left: type, Right: type, @"type": ProductType) type {
+    @setEvalBranchQuota(100000);
+    comptime {
+        var blades: []const Blade = &.{};
+        for (@typeInfo(Left).@"struct".fields) |left| {
+            for (@typeInfo(Right).@"struct".fields) |right| {
+                const left_list: Blade = bladeFromString(left.name);
+                const right_list: Blade = bladeFromString(right.name);
+                const blade = (BladeProduct(left_list, right_list) orelse continue)[1];
+                switch (@"type") {
+                    .inner => {
+                        const chosen_len = absDiff(left_list.len, right_list.len);
+                        if (chosen_len != blade.len) continue;
+                    },
+                    .outer => {
+                        const chosen_len = left_list.len + right_list.len;
+                        if (chosen_len != blade.len) continue;
+                    },
+                    .geometric => {},
+                }
+
+                blades = blades ++ &[1]Blade{blade};
+            }
+        }
+        return SelectTypeContainingBlades(
+            blades,
+            typesFromNamespace(primitive),
+        );
+    }
+}
+
+test Product {
+    try std.testing.expectEqual(primitive.Scalar, Product(primitive.Point, primitive.Point, .inner));
+    try std.testing.expectEqual(primitive.Translator, Product(primitive.Point, primitive.Point, .geometric));
+    try std.testing.expectEqual(primitive.Point, Product(primitive.Line, primitive.Plane, .outer));
+}
+
+fn product(lhs: anytype, rhs: anytype, comptime @"type": ProductType) Product(@TypeOf(lhs), @TypeOf(rhs), @"type") {
+    const Left = @TypeOf(lhs);
+    const Right = @TypeOf(rhs);
+
+    const Result = Product(@TypeOf(lhs), @TypeOf(rhs), @"type");
+
+    var result: Result = .{};
+    inline for (@typeInfo(Left).@"struct".fields) |left| {
+        inline for (@typeInfo(Right).@"struct".fields) |right| {
+            const sign, const result_field_name = comptime sign: {
+                const left_list: Blade = bladeFromString(left.name);
+                const right_list: Blade = bladeFromString(right.name);
+                const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
+                switch (@"type") {
+                    .inner => {
+                        const chosen_len = absDiff(left_list.len, right_list.len);
+                        if (chosen_len != result_blade.len) continue;
+                    },
+                    .outer => {
+                        const chosen_len = left_list.len + right_list.len;
+                        if (chosen_len != result_blade.len) continue;
+                    },
+                    .geometric => {},
+                }
+
+                const sign2, const result_field_name = getFieldNameFromBlade(Result, result_blade).?;
+                break :sign .{ sign.mult(sign2), result_field_name };
+            };
+
+            switch (sign) {
+                .@"1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    @field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                .@"-1" => @field(result, result_field_name) = @mulAdd(
+                    f32,
+                    @field(lhs, left.name),
+                    -@field(rhs, right.name),
+                    @field(result, result_field_name),
+                ),
+                else => comptime unreachable,
+            }
+        }
+    }
+    return result;
+}
+
+pub fn OuterProduct(Left: type, Right: type) type {
+    comptime {
+        return Product(Left, Right, .outer);
+    }
+}
+
+test OuterProduct {
+    try std.testing.expectEqual(primitive.Motor, OuterProduct(primitive.Motor, primitive.Motor));
+    try std.testing.expectEqual(primitive.Translator, OuterProduct(primitive.Translator, primitive.Translator));
+    try std.testing.expectEqual(primitive.Rotor, OuterProduct(primitive.Rotor, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Motor, OuterProduct(primitive.Motor, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Motor, OuterProduct(primitive.Translator, primitive.Rotor));
+    try std.testing.expectEqual(primitive.Line, OuterProduct(primitive.Plane, primitive.Plane));
+}
+
+pub fn outerProduct(lhs: anytype, rhs: anytype) OuterProduct(@TypeOf(lhs), @TypeOf(rhs)) {
+    return product(lhs, rhs, .outer);
+}
+
+test outerProduct {
+    // (e123 + e012 + 10e201 + 10) | (e123) = 10e123
+    try std.testing.expectEqual(primitive.Point{
+        .e123 = 10,
+    }, outerProduct(.{
         .e123 = 1,
         .e012 = 1,
         .e201 = 10,
