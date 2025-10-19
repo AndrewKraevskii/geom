@@ -1021,3 +1021,34 @@ test outerProduct {
         .e123 = 1,
     }));
 }
+
+pub fn RegressiveProduct(Left: type, Right: type) type {
+    @setEvalBranchQuota(30000);
+    return DualWithBasis(OuterProduct(DualWithBasis(Left, Basis.pseudo_vector), DualWithBasis(Right, Basis.pseudo_vector)), Basis.pseudo_vector);
+}
+
+test RegressiveProduct {
+    try std.testing.expectEqual(primitive.Line, RegressiveProduct(primitive.Point, primitive.Point));
+    try std.testing.expectEqual(primitive.Plane, RegressiveProduct(primitive.Point, primitive.Line));
+}
+
+pub fn regressiveProduct(lhs: anytype, rhs: anytype) RegressiveProduct(@TypeOf(lhs), @TypeOf(rhs)) {
+    @setEvalBranchQuota(30000);
+    return dual(product(dual(lhs), dual(rhs), .outer));
+}
+
+test regressiveProduct {
+    // TODO: sign is inconsistent here. Cheetsheet shouldn't it be minus?
+    // (e123 +e013 +10e201)∨(e123)=+10e12 +e13​
+    try std.testing.expectEqual(
+        primitive.Line{
+            .e31 = -1,
+            .e12 = 10,
+        },
+        regressiveProduct(.{
+            .e123 = 1,
+            .e013 = 1,
+            .e201 = 10,
+        }, .{ .e123 = 1 }),
+    );
+}
