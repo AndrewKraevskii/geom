@@ -765,67 +765,68 @@ pub fn dual(value: anytype) DualWithBasis(
     return result;
 }
 
+pub fn iDual(value: anytype) DualWithBasis(
+    @TypeOf(value),
+    Basis.pseudo_vector,
+) {
+    @setEvalBranchQuota(10000);
+    var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
+    inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+        const blade = comptime bladeFromString(field.name);
+        const xor = comptime xorBlade(bladeFromString(field.name), Basis.pseudo_vector);
+        const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), xor) orelse continue;
+        if (comptime sameSign(xor ++ blade, Basis.pseudo_vector) == (sign == .@"1")) {
+            @field(result, field_name) = @field(value, field.name);
+        } else {
+            @field(result, field_name) = -@field(value, field.name);
+        }
+    }
+
+    return result;
+}
+
 test dual {
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        primitive.Plane{
-            .e0 = 1,
-        },
-        dual(primitive.Plane{
-            .e0 = 1,
-        }),
-    ));
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        primitive.Plane{
-            .e1 = 1,
-        },
-        dual(primitive.Plane{
-            .e1 = 1,
-        }),
-    ));
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        primitive.Plane{
-            .e2 = 1,
-        },
-        dual(primitive.Plane{
-            .e2 = 1,
-        }),
-    ));
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        primitive.Plane{
-            .e3 = 1,
-        },
-        dual(primitive.Plane{
-            .e3 = 1,
-        }),
-    ));
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        primitive.Line{
-            .e12 = 1,
-        },
-        dual(primitive.Line{
-            .e12 = 1,
-        }),
-    ));
-    try std.testing.expectEqual(primitive.Motor{
-        .e0123 = 1,
-    }, geometricProduct(
-        .{
-            .@"1" = 1,
-        },
-        dual(.{
-            .@"1" = 1,
-        }),
-    ));
+    @setEvalBranchQuota(1000000);
+    inline for (@typeInfo(primitive.Multivector).@"struct".fields) |field| {
+        var blade: primitive.Multivector = .{};
+        @field(blade, field.name) = 1;
+
+        try std.testing.expectEqual(primitive.Multivector{
+            .e0123 = 1,
+        }, geometricProduct(
+            blade,
+            dual(blade),
+        ));
+
+        try std.testing.expectEqual(
+            blade,
+            iDual(dual(blade)),
+        );
+    }
+
+    try std.testing.expectEqual(primitive.Point{
+        .e123 = -1,
+    }, dual(dual(primitive.Point{
+        .e123 = 1,
+    })));
+    try std.testing.expectEqual(primitive.Point{
+        .e123 = 1,
+    }, iDual(dual(primitive.Point{
+        .e123 = 1,
+    })));
+
+    try std.testing.expectEqual(primitive.Plane{
+        .e1 = -1,
+    }, dual(primitive.Point{
+        .e032 = 1,
+    }));
+
+    try std.testing.expectEqual(primitive.Plane{
+        .e3 = 1,
+    }, dual(.{ .e012 = 1 }));
+    try std.testing.expectEqual(primitive.Plane{
+        .e0 = -1,
+    }, dual(.{ .e123 = 1 }));
 }
 
 export fn absDiff(a: usize, b: usize) usize {
@@ -1034,21 +1035,22 @@ test RegressiveProduct {
 
 pub fn regressiveProduct(lhs: anytype, rhs: anytype) RegressiveProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     @setEvalBranchQuota(30000);
-    return dual(product(dual(lhs), dual(rhs), .outer));
+    return iDual(product(dual(lhs), dual(rhs), .outer));
 }
 
 test regressiveProduct {
-    // TODO: sign is inconsistent here. Cheetsheet shouldn't it be minus?
-    // (e123 +e013 +10e201)∨(e123)=+10e12 +e13​
+    // NOTE: Calculator here https://bivector.net/tools.html?p=3&q=0&r=1 is wrong
+    // It gives negative e12 for this expression.
+    // e012 & e123 = -e12 <- bivector.net old calculator.
+    // e012 & e123 = +e12 <- new calculator https://enki.ws/ganja.js/examples/coffeeshop.html#XF2aui0Oi&fullscreen&1e012%20&%201e123.
+
     try std.testing.expectEqual(
         primitive.Line{
-            .e31 = -1,
-            .e12 = 10,
+            .e12 = 1,
         },
-        regressiveProduct(.{
-            .e123 = 1,
-            .e013 = 1,
-            .e201 = 10,
-        }, .{ .e123 = 1 }),
+        regressiveProduct(
+            .{ .e012 = 1 },
+            .{ .e123 = 1 },
+        ),
     );
 }
