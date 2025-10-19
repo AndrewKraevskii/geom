@@ -54,15 +54,6 @@ pub fn point(x: f32, y: f32, z: f32) primitive.Point {
     };
 }
 
-pub fn plane(x: f32, y: f32, z: f32) primitive.Point {
-    return .{
-        .e0 = 1,
-        .e1 = x,
-        .e2 = y,
-        .e3 = z,
-    };
-}
-
 pub const primitive = struct {
     pub const Scalar = struct {
         @"1": f32 = 0,
@@ -1091,7 +1082,78 @@ test equal {
 }
 
 pub fn expectEqual(lhs: anytype, rhs: anytype) error{TestExpectedEqual}!void {
-    if (!equal(lhs, rhs)) return error.TestExpectedEqual;
+    @setEvalBranchQuota(10000);
+    // TODO: perf remove duplicate comparisents.
+    const Left = @TypeOf(lhs);
+    const Right = @TypeOf(rhs);
+
+    inline for (@typeInfo(Left).@"struct".fields) |field| {
+        const left_value = @field(lhs, field.name);
+        const right_value = blk: {
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(rhs, right_field_name);
+        };
+
+        if (left_value != right_value) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+    inline for (@typeInfo(Right).@"struct".fields) |field| {
+        const right_value = @field(rhs, field.name);
+        const left_value = blk: {
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(lhs, left_field_name);
+        };
+
+        if (left_value != right_value) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+
+    return;
+}
+
+pub fn expectApproxEqual(lhs: anytype, rhs: anytype, tolerance: f32) error{TestExpectedEqual}!void {
+    @setEvalBranchQuota(10000);
+    // TODO: perf remove duplicate comparisents.
+    const Left = @TypeOf(lhs);
+    const Right = @TypeOf(rhs);
+
+    inline for (@typeInfo(Left).@"struct".fields) |field| {
+        const left_value = @field(lhs, field.name);
+        const right_value = blk: {
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(rhs, right_field_name);
+        };
+
+        if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+    inline for (@typeInfo(Right).@"struct".fields) |field| {
+        const right_value = @field(rhs, field.name);
+        const left_value = blk: {
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(lhs, left_field_name);
+        };
+
+        if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+
+    return;
+}
+
+pub fn expectApproxEqualIgnoreNorm(lhs: anytype, rhs: anytype, tolerance: f32) error{TestExpectedEqual}!void {
+    const scaled_left = geometricProduct(lhs, .{ .@"1" = norm(rhs) });
+    const scaled_right = geometricProduct(rhs, .{ .@"1" = norm(lhs) });
+
+    return expectApproxEqual(scaled_left, scaled_right, tolerance);
 }
 
 test regressiveProduct {
@@ -1110,3 +1172,92 @@ test regressiveProduct {
         ),
     );
 }
+fn typeParity(comptime T: type) ?enum { even, odd } {
+    const fields = @typeInfo(T).@"struct".fields;
+    if (fields.len == 0) {
+        return .even;
+    }
+    const parity = if (comptime bladeFromString(fields[0].name).len % 2 == 0) .even else .odd;
+    for (fields[1..]) |field| {
+        const field_parity = if (comptime bladeFromString(field.name).len % 2 == 0) .even else .odd;
+        if (field_parity != parity) {
+            return null;
+        }
+    }
+
+    return parity;
+}
+
+// It only works for objects which contain only ever or odd blades not mixed parity.
+// TODO: impelement it better not only for even/odd objects.
+pub fn sandwichProduct(
+    value: anytype,
+    transform: anytype,
+) @TypeOf(value) {
+    const value_parity = comptime typeParity(@TypeOf(value));
+    const transform_parity = comptime typeParity(@TypeOf(transform));
+
+    const result = reduce(@TypeOf(value), geometricProduct(geometricProduct(transform, value), reverse(transform)));
+
+    if (value_parity == .even or transform_parity == .even) {
+        return result;
+    } else {
+        return geometricProduct(result, .{ .@"1" = -1 });
+    }
+}
+
+test sandwichProduct {
+    try expectEqual(.{
+        .e123 = 1,
+        .e021 = -1,
+    }, sandwichProduct(primitive.Point{
+        .e123 = 1,
+    }, primitive.Translator{
+        .@"1" = 1,
+        .e03 = 1.0 / 2.0,
+    }));
+}
+
+// Doesn't preserve norm.
+pub fn orhogonalProjection(projecty: anytype, onto: anytype) @TypeOf(projecty) {
+    return reduce(@TypeOf(projecty), geometricProduct(innerProduct(projecty, onto), reverse(onto)));
+}
+
+test orhogonalProjection {
+    // projecting point onto itself gives same point.
+    {
+        const p = point(0, 0, 0);
+        try expectEqual(p, orhogonalProjection(p, p));
+    }
+    {
+        const p = point(2, -3, 10);
+        try expectEqual(p, orhogonalProjection(p, p));
+    }
+    // projecting plane onto itself gives same plane.
+    {
+        const p = primitive.Plane{
+            .e1 = 2,
+            .e2 = -3,
+            .e3 = 10,
+        };
+        try expectApproxEqualIgnoreNorm(p, orhogonalProjection(p, p), 0.001);
+    }
+    // project plane onto point and point onto plane.
+    {
+        const p = primitive.Plane{
+            .e1 = 2,
+        };
+        try expectApproxEqualIgnoreNorm(point(0, 2, 3), orhogonalProjection(point(1, 2, 3), p), 0.001);
+    }
+    {
+        const p = primitive.Plane{
+            .e1 = 2,
+        };
+        try expectApproxEqualIgnoreNorm(.{
+            .e0 = -2,
+            .e1 = 2,
+        }, orhogonalProjection(p, point(1, 2, 3)), 0.001);
+    }
+}
+
+// TODO: comutator product. I don't really need it yet.
