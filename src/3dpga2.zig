@@ -462,12 +462,12 @@ pub fn geometricProduct(lhs: anytype, rhs: anytype) GeometricProduct(@TypeOf(lhs
 }
 
 test geometricProduct {
-    try std.testing.expectEqual(primitive.Scalar{ .@"1" = 1 }, geometricProduct(.{
+    try expectEqual(.{ .@"1" = 1 }, geometricProduct(.{
         .e1 = 1,
     }, .{
         .e1 = 1,
     }));
-    try std.testing.expectEqual(primitive.Scalar{ .@"1" = -10 }, geometricProduct(.{
+    try expectEqual(.{ .@"1" = -10 }, geometricProduct(.{
         .e1 = 1,
     }, .{
         .e1 = -10,
@@ -475,7 +475,7 @@ test geometricProduct {
 
     {
         // spawing operands changes result
-        try std.testing.expectEqual(primitive.Plane{
+        try expectEqual(.{
             .e1 = -10,
             .e0 = -1,
         }, geometricProduct(
@@ -487,7 +487,7 @@ test geometricProduct {
                 .e01 = 1,
             },
         ));
-        try std.testing.expectEqual(primitive.Plane{
+        try expectEqual(.{
             .e1 = -10,
             .e0 = 1,
         }, geometricProduct(
@@ -502,7 +502,7 @@ test geometricProduct {
     }
     {
         // can swap numbers in field names to flip sign
-        try std.testing.expectEqual(primitive.Point{
+        try expectEqual(.{
             .e012 = 1,
         }, geometricProduct(
             .{
@@ -512,7 +512,7 @@ test geometricProduct {
                 .e0 = 1,
             },
         ));
-        try std.testing.expectEqual(primitive.Point{
+        try expectEqual(.{
             .e012 = -1,
         }, geometricProduct(
             .{
@@ -537,15 +537,15 @@ pub fn reduce(comptime T: type, value: anytype) T {
 }
 
 test reduce {
-    try std.testing.expectEqual(primitive.Translator{
+    try expectEqual(.{
         .@"1" = 1,
         .e01 = 1,
-    }, reduce(primitive.Translator, primitive.Motor{
+    }, reduce(primitive.Translator, .{
         .@"1" = 1,
         .e0123 = 1,
         .e01 = 1,
     }));
-    try std.testing.expectEqual(primitive.Translator{
+    try expectEqual(.{
         .@"1" = 1,
         .e01 = 0,
     }, reduce(primitive.Translator, .{
@@ -567,16 +567,16 @@ pub fn involute(value: anytype) @TypeOf(value) {
 }
 
 test involute {
-    try std.testing.expectEqual(primitive.Motor{
+    try expectEqual(.{
         .@"1" = 1,
         .e0123 = 1,
         .e01 = 1,
-    }, involute(primitive.Motor{
+    }, involute(.{
         .@"1" = 1,
         .e0123 = 1,
         .e01 = 1,
     }));
-    try std.testing.expectEqual(primitive.Point{
+    try expectEqual(.{
         .e012 = -1,
         .e013 = -1,
         .e123 = 1,
@@ -608,7 +608,7 @@ pub fn reverse(value: anytype) @TypeOf(value) {
 }
 
 test reverse {
-    try std.testing.expectEqual(primitive.Motor{
+    try expectEqual(.{
         .@"1" = 1,
         .e0123 = 1,
         .e01 = -1,
@@ -617,7 +617,7 @@ test reverse {
         .e0123 = 1,
         .e01 = 1,
     }));
-    try std.testing.expectEqual(primitive.Point{
+    try expectEqual(.{
         .e012 = -1,
         .e013 = -1,
         .e123 = 1,
@@ -632,13 +632,13 @@ test reverse {
         .e123 = -1,
     };
 
-    try std.testing.expectEqual(primitive.Translator{ .@"1" = 1 }, geometricProduct(random_point, reverse(random_point)));
-    try std.testing.expectEqual(primitive.Motor{ .@"1" = 3 }, geometricProduct(primitive.Plane{
+    try expectEqual(.{ .@"1" = 1 }, geometricProduct(random_point, reverse(random_point)));
+    try expectEqual(.{ .@"1" = 3 }, geometricProduct(.{
         .e0 = 1,
         .e1 = 1,
         .e2 = 1,
         .e3 = 1,
-    }, reverse(primitive.Plane{
+    }, reverse(.{
         .e0 = 1,
         .e1 = 1,
         .e2 = 1,
@@ -791,40 +791,40 @@ test dual {
         var blade: primitive.Multivector = .{};
         @field(blade, field.name) = 1;
 
-        try std.testing.expectEqual(primitive.Multivector{
+        try expectEqual(.{
             .e0123 = 1,
         }, geometricProduct(
             blade,
             dual(blade),
         ));
 
-        try std.testing.expectEqual(
+        try expectEqual(
             blade,
             iDual(dual(blade)),
         );
     }
 
-    try std.testing.expectEqual(primitive.Point{
+    try expectEqual(.{
         .e123 = -1,
-    }, dual(dual(primitive.Point{
+    }, dual(dual(.{
         .e123 = 1,
     })));
-    try std.testing.expectEqual(primitive.Point{
+    try expectEqual(.{
         .e123 = 1,
-    }, iDual(dual(primitive.Point{
+    }, iDual(dual(.{
         .e123 = 1,
     })));
 
-    try std.testing.expectEqual(primitive.Plane{
+    try expectEqual(.{
         .e1 = -1,
-    }, dual(primitive.Point{
+    }, dual(.{
         .e032 = 1,
     }));
 
-    try std.testing.expectEqual(primitive.Plane{
+    try expectEqual(.{
         .e3 = 1,
     }, dual(.{ .e012 = 1 }));
-    try std.testing.expectEqual(primitive.Plane{
+    try expectEqual(.{
         .e0 = -1,
     }, dual(.{ .e123 = 1 }));
 }
@@ -885,7 +885,7 @@ pub fn innerProduct(lhs: anytype, rhs: anytype) InnerProduct(@TypeOf(lhs), @Type
 
 test innerProduct {
     // (e123 + e012 + 10e201 + 10) | (e123) = −1+10e123
-    try std.testing.expectEqual(primitive.Multivector{
+    try expectEqual(.{
         .@"1" = -1,
         .e123 = 10,
     }, innerProduct(.{
@@ -1011,7 +1011,7 @@ pub fn outerProduct(lhs: anytype, rhs: anytype) OuterProduct(@TypeOf(lhs), @Type
 
 test outerProduct {
     // (e123 + e012 + 10e201 + 10) | (e123) = 10e123
-    try std.testing.expectEqual(primitive.Point{
+    try expectEqual(.{
         .e123 = 10,
     }, outerProduct(.{
         .e123 = 1,
@@ -1038,14 +1038,70 @@ pub fn regressiveProduct(lhs: anytype, rhs: anytype) RegressiveProduct(@TypeOf(l
     return iDual(product(dual(lhs), dual(rhs), .outer));
 }
 
+pub fn equal(lhs: anytype, rhs: anytype) bool {
+    @setEvalBranchQuota(10000);
+    // TODO: perf remove duplicate comparisents.
+    const Left = @TypeOf(lhs);
+    const Right = @TypeOf(rhs);
+
+    inline for (@typeInfo(Left).@"struct".fields) |field| {
+        const left_value = @field(lhs, field.name);
+        const right_value = blk: {
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(rhs, right_field_name);
+        };
+
+        if (left_value != right_value) return false;
+    }
+    inline for (@typeInfo(Right).@"struct".fields) |field| {
+        const right_value = @field(rhs, field.name);
+        const left_value = blk: {
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(lhs, left_field_name);
+        };
+
+        if (left_value != right_value) return false;
+    }
+
+    return true;
+}
+
+test equal {
+    try std.testing.expect(equal(.{
+        .e1 = 1,
+    }, .{
+        .e1 = 1,
+    }));
+    try std.testing.expect(!equal(.{
+        .e1 = 2,
+    }, .{
+        .e1 = 1,
+    }));
+    try std.testing.expect(!equal(.{}, .{
+        .e1 = 1,
+    }));
+    try std.testing.expect(!equal(.{
+        .e1 = 1,
+    }, .{}));
+    try std.testing.expect(equal(.{
+        .e12 = 1,
+    }, .{
+        .e21 = -1,
+    }));
+}
+
+pub fn expectEqual(lhs: anytype, rhs: anytype) error{TestExpectedEqual}!void {
+    if (!equal(lhs, rhs)) return error.TestExpectedEqual;
+}
+
 test regressiveProduct {
     // NOTE: Calculator here https://bivector.net/tools.html?p=3&q=0&r=1 is wrong
     // It gives negative e12 for this expression.
     // e012 & e123 = -e12 <- bivector.net old calculator.
     // e012 & e123 = +e12 <- new calculator https://enki.ws/ganja.js/examples/coffeeshop.html#XF2aui0Oi&fullscreen&1e012%20&%201e123.
 
-    try std.testing.expectEqual(
-        primitive.Line{
+    try expectEqual(
+        .{
             .e12 = 1,
         },
         regressiveProduct(
