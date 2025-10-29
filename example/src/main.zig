@@ -15,9 +15,6 @@ const draw = @import("draw.zig");
 
 const origin: p.Point = .{
     .e123 = 1,
-    .e032 = 0,
-    .e013 = 0,
-    .e012 = 0,
 };
 
 pub fn main() !void {
@@ -66,13 +63,13 @@ pub fn main() !void {
         const ray = rl.getScreenToWorldRay(rl.getMousePosition(), camera);
 
         const mouse_line = join(
-            p.Point{
+            .{
                 .e123 = 1,
                 .e032 = ray.position.x,
                 .e013 = ray.position.y,
                 .e012 = ray.position.z,
             },
-            p.Point{
+            .{
                 .e123 = 1,
                 .e032 = ray.position.add(ray.direction).x,
                 .e013 = ray.position.add(ray.direction).y,
@@ -80,11 +77,8 @@ pub fn main() !void {
             },
         );
 
-        const mouse_pos: p.Point = meet(mouse_line, p.Plane{
-            .e0 = 0,
-            .e1 = 0,
+        const mouse_pos: p.Point = meet(mouse_line, .{
             .e2 = 1,
-            .e3 = 0,
         });
 
         if (rl.isMouseButtonDown(.left)) {
@@ -94,11 +88,8 @@ pub fn main() !void {
         }
 
         {
-            const white_line = join(blue_point, p.Point{
-                .e123 = 1,
-                .e032 = 0,
+            const white_line = join(blue_point, .{
                 .e013 = 1,
-                .e012 = 0,
             });
 
             const pink_line = geo.lerp(
@@ -127,13 +118,11 @@ pub fn main() !void {
             draw.lineSegment(blue_point, red_point, .red);
             draw.arrow(origin, .{
                 .e123 = 1,
-                .e032 = 0,
                 .e013 = 5,
-                .e012 = 0,
             }, 0.9, 0.4, 0.4, .gray);
             const dual_plane = geo.dual(blue_point);
             draw.plane(dual_plane, .blue);
-            const plane = p.Plane{
+            const plane: p.Plane = .{
                 .e0 = 3,
                 .e1 = 3,
                 .e2 = 1,
