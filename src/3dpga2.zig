@@ -59,6 +59,14 @@ pub const primitive = struct {
         @"1": f32 = 0,
     };
 
+    pub const Pseudoscalar = struct {
+        e0123: f32 = 0,
+    };
+
+    pub const i: Pseudoscalar = .{
+        .e0123 = 1,
+    };
+
     pub const Plane = struct {
         e0: f32 = 0,
 
@@ -93,7 +101,7 @@ pub const primitive = struct {
         @"1": f32 = 0,
 
         e12: f32 = 0,
-        e13: f32 = 0,
+        e31: f32 = 0,
         e23: f32 = 0,
     };
 
@@ -359,6 +367,7 @@ pub fn typesFromNamespace(namespace: type) []const type {
     return comptime blk: {
         var types: []const type = &.{};
         for (@typeInfo(namespace).@"struct".decls) |decl| {
+            if (@TypeOf(@field(namespace, decl.name)) != type) continue;
             types = types ++ &[1]type{@field(namespace, decl.name)};
         }
         break :blk types;
@@ -517,6 +526,7 @@ test geometricProduct {
 }
 
 pub fn reduce(comptime T: type, value: anytype) T {
+    @setEvalBranchQuota(10000);
     var result: T = .{};
     inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
         const blades = comptime bladeFromString(field.name);
@@ -1014,10 +1024,14 @@ test outerProduct {
     }));
 }
 
+pub const meet = outerProduct;
+
 pub fn RegressiveProduct(Left: type, Right: type) type {
     @setEvalBranchQuota(30000);
     return DualWithBasis(OuterProduct(DualWithBasis(Left, Basis.pseudo_vector), DualWithBasis(Right, Basis.pseudo_vector)), Basis.pseudo_vector);
 }
+
+pub const join = regressiveProduct;
 
 test RegressiveProduct {
     try std.testing.expectEqual(primitive.Line, RegressiveProduct(primitive.Point, primitive.Point));
@@ -1081,17 +1095,17 @@ test equal {
     }));
 }
 
-pub fn expectEqual(lhs: anytype, rhs: anytype) error{TestExpectedEqual}!void {
+pub fn expectEqual(expected: anytype, actual: anytype) error{TestExpectedEqual}!void {
     @setEvalBranchQuota(10000);
     // TODO: perf remove duplicate comparisents.
-    const Left = @TypeOf(lhs);
-    const Right = @TypeOf(rhs);
+    const Expected = @TypeOf(expected);
+    const Actual = @TypeOf(actual);
 
-    inline for (@typeInfo(Left).@"struct".fields) |field| {
-        const left_value = @field(lhs, field.name);
+    inline for (@typeInfo(Expected).@"struct".fields) |field| {
+        const left_value = @field(expected, field.name);
         const right_value = blk: {
-            const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
-            break :blk sign.float(f32) * @field(rhs, right_field_name);
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(actual, right_field_name);
         };
 
         if (left_value != right_value) {
@@ -1099,11 +1113,11 @@ pub fn expectEqual(lhs: anytype, rhs: anytype) error{TestExpectedEqual}!void {
             return error.TestExpectedEqual;
         }
     }
-    inline for (@typeInfo(Right).@"struct".fields) |field| {
-        const right_value = @field(rhs, field.name);
+    inline for (@typeInfo(Actual).@"struct".fields) |field| {
+        const right_value = @field(actual, field.name);
         const left_value = blk: {
-            const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
-            break :blk sign.float(f32) * @field(lhs, left_field_name);
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Expected, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(expected, left_field_name);
         };
 
         if (left_value != right_value) {
@@ -1115,17 +1129,17 @@ pub fn expectEqual(lhs: anytype, rhs: anytype) error{TestExpectedEqual}!void {
     return;
 }
 
-pub fn expectApproxEqual(lhs: anytype, rhs: anytype, tolerance: f32) error{TestExpectedEqual}!void {
+pub fn expectApproxEqual(expect: anytype, actual: anytype, tolerance: f32) error{TestExpectedEqual}!void {
     @setEvalBranchQuota(10000);
     // TODO: perf remove duplicate comparisents.
-    const Left = @TypeOf(lhs);
-    const Right = @TypeOf(rhs);
+    const Expect = @TypeOf(expect);
+    const Actual = @TypeOf(actual);
 
-    inline for (@typeInfo(Left).@"struct".fields) |field| {
-        const left_value = @field(lhs, field.name);
+    inline for (@typeInfo(Expect).@"struct".fields) |field| {
+        const left_value = @field(expect, field.name);
         const right_value = blk: {
-            const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
-            break :blk sign.float(f32) * @field(rhs, right_field_name);
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(actual, right_field_name);
         };
 
         if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
@@ -1133,11 +1147,11 @@ pub fn expectApproxEqual(lhs: anytype, rhs: anytype, tolerance: f32) error{TestE
             return error.TestExpectedEqual;
         }
     }
-    inline for (@typeInfo(Right).@"struct".fields) |field| {
-        const right_value = @field(rhs, field.name);
+    inline for (@typeInfo(Actual).@"struct".fields) |field| {
+        const right_value = @field(actual, field.name);
         const left_value = blk: {
-            const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
-            break :blk sign.float(f32) * @field(lhs, left_field_name);
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(expect, left_field_name);
         };
 
         if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
@@ -1260,4 +1274,133 @@ test orhogonalProjection {
     }
 }
 
-// TODO: comutator product. I don't really need it yet.
+pub fn Merge(Left: type, Right: type) type {
+    @setEvalBranchQuota(10000);
+    var blades: []const Blade = &.{};
+    for (@typeInfo(Left).@"struct".fields) |field| {
+        blades = blades ++ &[1]Blade{bladeFromString(field.name)};
+    }
+    outer: for (@typeInfo(Right).@"struct".fields) |field| {
+        const right_blade = bladeFromString(field.name);
+        for (blades[0..@typeInfo(Left).@"struct".fields.len]) |left_blade| {
+            if (same(left_blade, right_blade)) {
+                continue :outer;
+            }
+        }
+        blades = blades ++ &[1]Blade{right_blade};
+    }
+
+    return SelectTypeContainingBlades(
+        blades,
+        typesFromNamespace(primitive),
+    );
+}
+
+pub fn add(lhs: anytype, rhs: anytype) Merge(@TypeOf(lhs), @TypeOf(rhs)) {
+    const Result = Merge(@TypeOf(lhs), @TypeOf(rhs));
+    var lhs_result: Result = reduce(Result, lhs);
+    var rhs_result: Result = reduce(Result, rhs);
+    var result: Result = undefined;
+    inline for (@typeInfo(Result).@"struct".fields) |field| {
+        @field(result, field.name) = @field(rhs_result, field.name) + @field(lhs_result, field.name);
+    }
+    return result;
+}
+
+test add {
+    try expectEqual(.{
+        .e1 = 1,
+        .e12 = 2,
+    }, add(.{
+        .e12 = 2,
+    }, .{
+        .e1 = 1,
+    }));
+    try expectEqual(.{
+        .e12 = 2,
+    }, add(.{
+        .e12 = 2,
+    }, .{}));
+}
+
+/// source https://www.researchgate.net/publication/360528787_Normalization_Square_Roots_and_the_Exponential_and_Logarithmic_Maps_in_Geometric_Algebras_of_Less_than_6D
+pub fn exp(bivector: primitive.Line) primitive.Motor {
+    const l = (bivector.e12 * bivector.e12 + bivector.e31 * bivector.e31 + bivector.e23 * bivector.e23);
+
+    if (l == 0) return .{
+        .@"1" = 1,
+        .e01 = bivector.e01,
+        .e02 = bivector.e02,
+        .e03 = bivector.e03,
+        .e12 = 0,
+        .e31 = 0,
+        .e23 = 0,
+        .e0123 = 0,
+    };
+    const m = (bivector.e01 * bivector.e23 + bivector.e02 * bivector.e31 + bivector.e03 * bivector.e12);
+    const a = @sqrt(l);
+    const c = @cos(a);
+    const s = @sin(a) / a;
+    const t = m / l * (c - s);
+
+    return .{
+        .@"1" = c,
+        .e01 = s * bivector.e01 + t * bivector.e23,
+        .e02 = s * bivector.e02 + t * bivector.e31,
+        .e03 = s * bivector.e03 + t * bivector.e12,
+        .e12 = s * bivector.e12,
+        .e31 = s * bivector.e31,
+        .e23 = s * bivector.e23,
+        .e0123 = m * s,
+    };
+}
+
+pub fn log(motor: primitive.Motor) primitive.Line {
+    if (motor.@"1" == 1) return reduce(primitive.Line, motor);
+
+    const a = 1 / (1 - motor.@"1" * motor.@"1");
+    const b = std.math.acos(motor.@"1") * @sqrt(a);
+    const c = a * motor.e0123 * (1 - motor.@"1" * b);
+
+    return .{
+        .e01 = c * motor.e23 + b * motor.e01,
+        .e02 = c * motor.e31 + b * motor.e02,
+        .e03 = c * motor.e12 + b * motor.e03,
+        .e12 = b * motor.e12,
+        .e31 = b * motor.e31,
+        .e23 = b * motor.e23,
+    };
+}
+
+test "log(exp(x)) == x" {
+    const line: primitive.Line = .{
+        .e12 = 1.0,
+        .e23 = 1.0,
+    };
+    try expectApproxEqualIgnoreNorm(line, log(exp(line)), 0.0001);
+}
+
+pub fn lerp(lhs: anytype, rhs: anytype, t: f32) Merge(@TypeOf(lhs), @TypeOf(rhs)) {
+    const Result = Merge(@TypeOf(lhs), @TypeOf(rhs));
+    var lhs_result: Result = reduce(Result, lhs);
+    var rhs_result: Result = reduce(Result, rhs);
+    var result: Result = undefined;
+    inline for (@typeInfo(Result).@"struct".fields) |field| {
+        @field(result, field.name) = (1 - t) * @field(lhs_result, field.name) + t * @field(rhs_result, field.name);
+    }
+    return result;
+}
+
+pub fn normalized(value: anytype) @TypeOf(value) {
+    return geometricProduct(value, .{ .@"1" = 1 / norm(value) });
+}
+
+test normalized {
+    try std.testing.expectEqual(1, norm(normalized(primitive.Line{
+        .e12 = 2,
+    })));
+    try std.testing.expectEqual(1, norm(normalized(primitive.Line{
+        .e01 = 1,
+        .e12 = 1,
+    })));
+}

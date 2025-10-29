@@ -1,23 +1,22 @@
 const geo = @import("geo");
-const Point = geo.Point;
 const sandwich = geo.sandwich;
-const project = geo.project;
-const mult = geo.product;
+const project = geo.orhogonalProjection;
+const mult = geo.geometricProduct;
 const join = geo.join;
 const meet = geo.meet;
 const rl = @import("raylib");
 const Color = rl.Color;
 
-const origin: geo.Point = .{
+const origin: geo.primitive.Point = .{
     .e123 = 1,
-    .e023 = 0,
+    .e032 = 0,
     .e013 = 0,
     .e012 = 0,
 };
 
-pub fn point(p: Point, color: Color) void {
+pub fn point(p: geo.primitive.Point, color: Color) void {
     const vec: rl.Vector3 = .{
-        .x = p.e023 / p.e123,
+        .x = p.e032 / p.e123,
         .y = p.e013 / p.e123,
         .z = p.e012 / p.e123,
     };
@@ -27,7 +26,7 @@ pub fn point(p: Point, color: Color) void {
 const plane_distance_from_origin = 10;
 const line_len = 100;
 
-pub fn line(l: geo.Line, color: Color) void {
+pub fn line(l: geo.primitive.Line, color: Color) void {
     var _plane = geo.normalized(geo.innerProduct(
         origin,
         l,
@@ -40,18 +39,12 @@ pub fn line(l: geo.Line, color: Color) void {
     lineSegment(start, end, color);
 }
 
-pub fn plane(p: geo.Plane, color: Color) void {
-    const vertical_line = geo.Line{
-        .e01 = 0,
-        .e02 = 0,
-        .e03 = 0,
-
-        .e12 = 0,
-        .e13 = 1,
-        .e23 = 0,
+pub fn plane(p: geo.primitive.Plane, color: Color) void {
+    const vertical_line = geo.primitive.Line{
+        .e31 = 1,
     };
 
-    const line_on_plane = project(p, vertical_line);
+    const line_on_plane = project(vertical_line, p);
     line(line_on_plane, color);
 
     var horisontal_plane_down = geo.normalized(join(line_on_plane, origin));
@@ -64,7 +57,7 @@ pub fn plane(p: geo.Plane, color: Color) void {
     var vertical_plane_right = vertical_plane_left;
     vertical_plane_right.e0 *= -1;
 
-    const points = [_]geo.Point{
+    const points = [_]geo.primitive.Point{
         meet(meet(horisontal_plane_up, vertical_plane_left), p),
         meet(meet(horisontal_plane_down, vertical_plane_left), p),
         meet(meet(horisontal_plane_up, vertical_plane_right), p),
@@ -74,23 +67,23 @@ pub fn plane(p: geo.Plane, color: Color) void {
     triangle(points[1..4].*, color.alpha(0.5));
 }
 
-pub fn motor(_motor: geo.Motor, color: Color) void {
-    line(geo.truncateType(_motor, geo.Line), color);
+pub fn motor(_motor: geo.primitive.Motor, color: Color) void {
+    line(geo.reduce(geo.primitive.Line, _motor), color);
 }
 
-pub fn lineSegment(start: geo.Point, end: geo.Point, color: Color) void {
+pub fn lineSegment(start: geo.primitive.Point, end: geo.primitive.Point, color: Color) void {
     rl.drawLine3D(toRaylibPoint(start), toRaylibPoint(end), color);
 }
 
-pub fn toRaylibPoint(p: Point) rl.Vector3 {
+pub fn toRaylibPoint(p: geo.primitive.Point) rl.Vector3 {
     return .{
-        .x = p.e023 / p.e123,
+        .x = p.e032 / p.e123,
         .y = p.e013 / p.e123,
         .z = p.e012 / p.e123,
     };
 }
 
-pub fn triangle(points: [3]Point, color: Color) void {
+pub fn triangle(points: [3]geo.primitive.Point, color: Color) void {
     rl.drawTriangle3D(
         toRaylibPoint(points[0]),
         toRaylibPoint(points[1]),
@@ -105,7 +98,7 @@ pub fn triangle(points: [3]Point, color: Color) void {
     );
 }
 
-pub fn arrow(position: Point, end: Point, headPart: f32, headRadius: f32, lineThickness: f32, color: Color) void {
+pub fn arrow(position: geo.primitive.Point, end: geo.primitive.Point, headPart: f32, headRadius: f32, lineThickness: f32, color: Color) void {
     const headPos = geo.lerp(
         geo.normalized(position),
         geo.normalized(end),

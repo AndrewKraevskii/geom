@@ -2,20 +2,20 @@ const std = @import("std");
 
 const geo = @import("geo");
 const Vec2 = geo.Vec2;
-const Point = geo.Point;
-const sandwich = geo.sandwich;
-const project = geo.project;
-const mult = geo.product;
+const sandwich = geo.sandwichProduct;
+const project = geo.orhogonalProjection;
+const mult = geo.geometricProduct;
 const join = geo.join;
 const meet = geo.meet;
 const rl = @import("raylib");
 const Color = rl.Color;
+const p = geo.primitive;
 
 const draw = @import("draw.zig");
 
-const origin: geo.Point = .{
+const origin: p.Point = .{
     .e123 = 1,
-    .e023 = 0,
+    .e032 = 0,
     .e013 = 0,
     .e012 = 0,
 };
@@ -40,16 +40,16 @@ pub fn main() !void {
         .projection = .perspective,
     };
 
-    var red_point: Point = .{
+    var red_point: p.Point = .{
         .e123 = 1,
         .e012 = 3,
-        .e023 = -1,
+        .e032 = 1,
         .e013 = -4,
     };
-    var blue_point: Point = .{
+    var blue_point: p.Point = .{
         .e123 = 1,
         .e012 = 0,
-        .e023 = 7,
+        .e032 = -7,
         .e013 = -9,
     };
 
@@ -66,21 +66,21 @@ pub fn main() !void {
         const ray = rl.getScreenToWorldRay(rl.getMousePosition(), camera);
 
         const mouse_line = join(
-            geo.Point{
+            p.Point{
                 .e123 = 1,
-                .e023 = ray.position.x,
+                .e032 = ray.position.x,
                 .e013 = ray.position.y,
                 .e012 = ray.position.z,
             },
-            geo.Point{
+            p.Point{
                 .e123 = 1,
-                .e023 = ray.position.add(ray.direction).x,
+                .e032 = ray.position.add(ray.direction).x,
                 .e013 = ray.position.add(ray.direction).y,
                 .e012 = ray.position.add(ray.direction).z,
             },
         );
 
-        const mouse_pos: Point = meet(mouse_line, geo.Plane{
+        const mouse_pos: p.Point = meet(mouse_line, p.Plane{
             .e0 = 0,
             .e1 = 0,
             .e2 = 1,
@@ -94,9 +94,9 @@ pub fn main() !void {
         }
 
         {
-            const white_line = join(blue_point, Point{
+            const white_line = join(blue_point, p.Point{
                 .e123 = 1,
-                .e023 = 0,
+                .e032 = 0,
                 .e013 = 1,
                 .e012 = 0,
             });
@@ -108,12 +108,12 @@ pub fn main() !void {
             );
 
             const green_point = sandwich(
-                geo.exp(
-                    geo.scale(geo.normalized(pink_line), @floatCast(rl.getTime())),
-                ),
                 red_point,
+                geo.exp(
+                    geo.geometricProduct(geo.normalized(pink_line), .{ .@"1" = @as(f32, @floatCast(rl.getTime())) }),
+                ),
             );
-            const yellow_point = project(white_line, red_point);
+            const yellow_point = project(red_point, white_line);
 
             draw.line(white_line, .white);
             draw.line(join(blue_point, red_point), .red);
@@ -127,13 +127,13 @@ pub fn main() !void {
             draw.lineSegment(blue_point, red_point, .red);
             draw.arrow(origin, .{
                 .e123 = 1,
-                .e023 = 0,
+                .e032 = 0,
                 .e013 = 5,
                 .e012 = 0,
             }, 0.9, 0.4, 0.4, .gray);
             const dual_plane = geo.dual(blue_point);
             draw.plane(dual_plane, .blue);
-            const plane = geo.Plane{
+            const plane = p.Plane{
                 .e0 = 3,
                 .e1 = 3,
                 .e2 = 1,
