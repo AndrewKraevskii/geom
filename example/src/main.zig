@@ -89,13 +89,13 @@ pub fn main() !void {
 
         {
             const white_line = join(blue_point, .{
-                .e013 = 1,
+                .e023 = 1,
             });
 
             const pink_line = geo.lerp(
                 geo.normalized(white_line),
                 geo.normalized(join(blue_point, red_point)),
-                0.5,
+                @sin(@as(f32, @floatCast(rl.getTime()))),
             );
 
             const green_point = sandwich(
@@ -130,7 +130,7 @@ pub fn main() !void {
             };
             draw.plane(plane, .dark_blue);
             draw.line(meet(plane, dual_plane), .white);
-            draw.motor(mult(white_line, pink_line), .brown);
+            // draw.motor(mult(white_line, pink_line), .brown);
         }
     }
 }

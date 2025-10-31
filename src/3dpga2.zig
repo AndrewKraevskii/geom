@@ -1298,8 +1298,8 @@ pub fn Merge(Left: type, Right: type) type {
 
 pub fn add(lhs: anytype, rhs: anytype) Merge(@TypeOf(lhs), @TypeOf(rhs)) {
     const Result = Merge(@TypeOf(lhs), @TypeOf(rhs));
-    var lhs_result: Result = reduce(Result, lhs);
-    var rhs_result: Result = reduce(Result, rhs);
+    const lhs_result: Result = reduce(Result, lhs);
+    const rhs_result: Result = reduce(Result, rhs);
     var result: Result = undefined;
     inline for (@typeInfo(Result).@"struct".fields) |field| {
         @field(result, field.name) = @field(rhs_result, field.name) + @field(lhs_result, field.name);
@@ -1382,8 +1382,8 @@ test "log(exp(x)) == x" {
 
 pub fn lerp(lhs: anytype, rhs: anytype, t: f32) Merge(@TypeOf(lhs), @TypeOf(rhs)) {
     const Result = Merge(@TypeOf(lhs), @TypeOf(rhs));
-    var lhs_result: Result = reduce(Result, lhs);
-    var rhs_result: Result = reduce(Result, rhs);
+    const lhs_result: Result = reduce(Result, lhs);
+    const rhs_result: Result = reduce(Result, rhs);
     var result: Result = undefined;
     inline for (@typeInfo(Result).@"struct".fields) |field| {
         @field(result, field.name) = (1 - t) * @field(lhs_result, field.name) + t * @field(rhs_result, field.name);
