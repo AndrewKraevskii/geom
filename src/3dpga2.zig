@@ -1404,3 +1404,20 @@ test normalized {
         .e12 = 1,
     })));
 }
+
+pub fn sqrt(value: anytype) @TypeOf(value) {
+    const n = normalized(value);
+
+    return add(n, .{ .@"1" = 1 });
+}
+
+test sqrt {
+    const motor = normalized(primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    });
+    const sqrt_of_motor = sqrt(motor);
+
+    try expectApproxEqual(motor, normalized(geometricProduct(sqrt_of_motor, sqrt_of_motor)), 0.000001);
+}
