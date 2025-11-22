@@ -39,13 +39,13 @@ pub fn main() !void {
 
     var red_point: p.Point = .{
         .e123 = 1,
-        .e012 = 3,
+        .e021 = -3,
         .e032 = 1,
         .e013 = -4,
     };
     var blue_point: p.Point = .{
         .e123 = 1,
-        .e012 = 0,
+        .e021 = 0,
         .e032 = -7,
         .e013 = -9,
     };
@@ -67,13 +67,13 @@ pub fn main() !void {
                 .e123 = 1,
                 .e032 = ray.position.x,
                 .e013 = ray.position.y,
-                .e012 = ray.position.z,
+                .e021 = ray.position.z,
             },
             .{
                 .e123 = 1,
                 .e032 = ray.position.add(ray.direction).x,
                 .e013 = ray.position.add(ray.direction).y,
-                .e012 = ray.position.add(ray.direction).z,
+                .e021 = ray.position.add(ray.direction).z,
             },
         );
 

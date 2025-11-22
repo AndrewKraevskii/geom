@@ -11,14 +11,14 @@ const origin: geo.primitive.Point = .{
     .e123 = 1,
     .e032 = 0,
     .e013 = 0,
-    .e012 = 0,
+    .e021 = 0,
 };
 
 pub fn point(p: geo.primitive.Point, color: Color) void {
     const vec: rl.Vector3 = .{
         .x = p.e032 / p.e123,
         .y = p.e013 / p.e123,
-        .z = p.e012 / p.e123,
+        .z = p.e021 / p.e123,
     };
     rl.drawSphere(vec, 1, color);
 }
@@ -79,7 +79,7 @@ pub fn toRaylibPoint(p: geo.primitive.Point) rl.Vector3 {
     return .{
         .x = p.e032 / p.e123,
         .y = p.e013 / p.e123,
-        .z = p.e012 / p.e123,
+        .z = p.e021 / p.e123,
     };
 }
 
