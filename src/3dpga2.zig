@@ -50,7 +50,7 @@ pub fn point(x: f32, y: f32, z: f32) primitive.Point {
         .e123 = 1,
         .e032 = x,
         .e013 = y,
-        .e012 = z,
+        .e021 = z,
     };
 }
 
@@ -87,13 +87,12 @@ pub const primitive = struct {
 
     pub const Point = struct {
         e123: f32 = 0,
-
         /// x
         e032: f32 = 0,
         /// y
         e013: f32 = 0,
         /// z
-        e012: f32 = 0,
+        e021: f32 = 0,
     };
 
     /// Also known as `quaternion`
@@ -153,7 +152,7 @@ pub const primitive = struct {
         /// y
         e013: f32 = 0,
         /// z
-        e012: f32 = 0,
+        e021: f32 = 0,
 
         e0123: f32 = 0,
     };
@@ -457,6 +456,23 @@ test GeometricProduct {
     try std.testing.expectEqual(primitive.Motor, GeometricProduct(primitive.Plane, primitive.Plane));
 }
 
+pub fn sqrt(value: anytype) @TypeOf(value) {
+    const n = normalized(value);
+
+    return add(n, .{ .@"1" = 1 });
+}
+
+test sqrt {
+    const motor = primitive.Motor{
+        .@"1" = 1,
+        .e0123 = 1,
+        .e01 = 1,
+    };
+    const sqrt_of_motor = sqrt(motor);
+
+    try expectApproxEqualRel(motor, normalized(geometricProduct(sqrt_of_motor, sqrt_of_motor)), 0.000001);
+}
+
 pub fn geometricProduct(lhs: anytype, rhs: anytype) GeometricProduct(@TypeOf(lhs), @TypeOf(rhs)) {
     return product(lhs, rhs, .geometric);
 }
@@ -582,7 +598,7 @@ test involute {
         .e013 = -1,
         .e123 = 1,
     }, involute(primitive.Point{
-        .e012 = 1,
+        .e021 = -1,
         .e013 = 1,
         .e123 = -1,
     }));
@@ -623,12 +639,12 @@ test reverse {
         .e013 = -1,
         .e123 = 1,
     }, reverse(primitive.Point{
-        .e012 = 1,
+        .e021 = -1,
         .e013 = 1,
         .e123 = -1,
     }));
     const random_point: primitive.Point = .{
-        .e012 = 1,
+        .e021 = -1,
         .e013 = 1,
         .e123 = -1,
     };
@@ -726,6 +742,7 @@ test xorBlade {
 }
 
 fn DualWithBasis(comptime T: type, comptime base: Blade) type {
+    @setEvalBranchQuota(100000);
     var blades: []const Blade = &.{};
     for (@typeInfo(T).@"struct".fields) |field| {
         blades = blades ++ &[1]Blade{xorBlade(bladeFromString(field.name), base)};
@@ -750,7 +767,7 @@ pub fn dual(value: anytype) DualWithBasis(
     @TypeOf(value),
     Basis.pseudo_vector,
 ) {
-    @setEvalBranchQuota(10000);
+    @setEvalBranchQuota(100000);
     var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
     inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
         const blade = comptime bladeFromString(field.name);
@@ -1129,7 +1146,7 @@ pub fn expectEqual(expected: anytype, actual: anytype) error{TestExpectedEqual}!
     return;
 }
 
-pub fn expectApproxEqual(expect: anytype, actual: anytype, tolerance: f32) error{TestExpectedEqual}!void {
+pub fn expectApproxEqualRel(expect: anytype, actual: anytype, tolerance: f32) error{TestExpectedEqual}!void {
     @setEvalBranchQuota(10000);
     // TODO: perf remove duplicate comparisents.
     const Expect = @TypeOf(expect);
@@ -1163,11 +1180,45 @@ pub fn expectApproxEqual(expect: anytype, actual: anytype, tolerance: f32) error
     return;
 }
 
+pub fn expectApproxEqualAbs(expect: anytype, actual: anytype, tolerance: f32) error{TestExpectedEqual}!void {
+    @setEvalBranchQuota(10000);
+    // TODO: perf remove duplicate comparisents.
+    const Expect = @TypeOf(expect);
+    const Actual = @TypeOf(actual);
+
+    inline for (@typeInfo(Expect).@"struct".fields) |field| {
+        const left_value = @field(expect, field.name);
+        const right_value = blk: {
+            const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(actual, right_field_name);
+        };
+
+        if (!std.math.approxEqAbs(f32, left_value, right_value, tolerance)) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+    inline for (@typeInfo(Actual).@"struct".fields) |field| {
+        const right_value = @field(actual, field.name);
+        const left_value = blk: {
+            const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(field.name)) orelse break :blk 0;
+            break :blk sign.float(f32) * @field(expect, left_field_name);
+        };
+
+        if (!std.math.approxEqAbs(f32, left_value, right_value, tolerance)) {
+            std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+            return error.TestExpectedEqual;
+        }
+    }
+
+    return;
+}
+
 pub fn expectApproxEqualIgnoreNorm(lhs: anytype, rhs: anytype, tolerance: f32) error{TestExpectedEqual}!void {
     const scaled_left = geometricProduct(lhs, .{ .@"1" = norm(rhs) });
     const scaled_right = geometricProduct(rhs, .{ .@"1" = norm(lhs) });
 
-    return expectApproxEqual(scaled_left, scaled_right, tolerance);
+    return expectApproxEqualRel(scaled_left, scaled_right, tolerance);
 }
 
 test regressiveProduct {
@@ -1392,7 +1443,11 @@ pub fn lerp(lhs: anytype, rhs: anytype, t: f32) Merge(@TypeOf(lhs), @TypeOf(rhs)
 }
 
 pub fn normalized(value: anytype) @TypeOf(value) {
-    return geometricProduct(value, .{ .@"1" = 1 / norm(value) });
+    const finite_norm = norm(value);
+    // const infinite_norm = iNorm(value);
+    // const n = if (std.math.approxEqAbs(f32, finite_norm, 0, 0e-10)) infinite_norm else finite_norm;
+    const n = finite_norm;
+    return geometricProduct(value, .{ .@"1" = 1 / n });
 }
 
 test normalized {
@@ -1403,21 +1458,4 @@ test normalized {
         .e01 = 1,
         .e12 = 1,
     })));
-}
-
-pub fn sqrt(value: anytype) @TypeOf(value) {
-    const n = normalized(value);
-
-    return add(n, .{ .@"1" = 1 });
-}
-
-test sqrt {
-    const motor = normalized(primitive.Motor{
-        .@"1" = 1,
-        .e0123 = 1,
-        .e01 = 1,
-    });
-    const sqrt_of_motor = sqrt(motor);
-
-    try expectApproxEqual(motor, normalized(geometricProduct(sqrt_of_motor, sqrt_of_motor)), 0.000001);
 }
