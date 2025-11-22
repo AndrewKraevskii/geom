@@ -2,16 +2,15 @@
     .name = .example,
     .version = "0.0.0",
     .fingerprint = 0x6eec9b9fcbd7e3c6,
-    .minimum_zig_version = "0.15.0-dev.58+1f92b394e",
+    .minimum_zig_version = "0.16.0-dev.2979+e93834410",
 
     .dependencies = .{
         .geo_math = .{
             .path = "..",
         },
         .raylib = .{
-            // .url = "git+https://github.com/Not-Nik/raylib-zig.git#d4fc514d54a3b37b9b3e4f4983f611c3469e8c2a",
-            // .hash = "raylib_zig-5.6.0-dev-KE8REHguBQAE0xoNkra7mtEqr8cCZHk7k_03txLZB-cZ",
-            .path = "../../raylib-zig",
+            .url = "git+https://github.com/AndrewKraevskii/raylib-zig?ref=update_to_zig#1c899b25f9429197dbc92b8210f116dfccdb62f4",
+            .hash = "raylib_zig-5.6.0-dev-KE8REFtOBQC6UyZjBjHWchFs7yYlbXb9FEfoWT3zwTt2",
         },
     },
 
