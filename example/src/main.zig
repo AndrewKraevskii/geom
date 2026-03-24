@@ -1,15 +1,20 @@
 const std = @import("std");
 
 const geo = @import("geo");
-const Vec2 = geo.Vec2;
-const sandwich = geo.sandwichProduct;
-const project = geo.orhogonalProjection;
-const mult = geo.geometricProduct;
-const join = geo.join;
-const meet = geo.meet;
+const pga_geo = geo.pga;
+const Vec2 = pga_geo.Vec2;
+const sandwich = pga_geo.sandwichProduct;
+const project = pga_geo.orhogonalProjection;
+const mult = pga_geo.geometricProduct;
+const join = pga_geo.join;
+const meet = pga_geo.meet;
+const lerp = pga_geo.lerp;
+const exp = pga_geo.exp;
+const normalized = pga_geo.normalized;
+const dual = pga_geo.dual;
 const rl = @import("raylib");
 const Color = rl.Color;
-const p = geo.primitive;
+const p = geo.pga_primitive;
 
 const draw = @import("draw.zig");
 
@@ -92,16 +97,16 @@ pub fn main() !void {
                 .e023 = 1,
             });
 
-            const pink_line = geo.lerp(
-                geo.normalized(white_line),
-                geo.normalized(join(blue_point, red_point)),
+            const pink_line = lerp(
+                normalized(white_line),
+                normalized(join(blue_point, red_point)),
                 @sin(@as(f32, @floatCast(rl.getTime()))),
             );
 
             const green_point = sandwich(
                 red_point,
-                geo.exp(
-                    geo.geometricProduct(geo.normalized(pink_line), .{ .@"1" = @as(f32, @floatCast(rl.getTime())) }),
+                exp(
+                    mult(normalized(pink_line), .{ .@"1" = @as(f32, @floatCast(rl.getTime())) }),
                 ),
             );
             const yellow_point = project(red_point, white_line);
@@ -120,7 +125,7 @@ pub fn main() !void {
                 .e123 = 1,
                 .e013 = 5,
             }, 0.9, 0.4, 0.4, .gray);
-            const dual_plane = geo.dual(blue_point);
+            const dual_plane = dual(blue_point);
             draw.plane(dual_plane, .blue);
             const plane: p.Plane = .{
                 .e0 = 3,
