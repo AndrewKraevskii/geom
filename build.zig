@@ -26,4 +26,18 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
+
+    const bench_step = b.step("benchmark", "");
+    bench_step.dependOn(&b.addRunArtifact(b.addExecutable(.{
+        .name = "bench",
+        .root_module = b.createModule(.{
+            .target = target,
+            // Even tho it only relly matters for release builds. Making it fast for debug builds would be cool too.
+            .optimize = optimize,
+            .root_source_file = b.path("src/benchmark.zig"),
+            .imports = &.{
+                .{ .module = lib_mod, .name = "geom" },
+            },
+        }),
+    })).step);
 }
