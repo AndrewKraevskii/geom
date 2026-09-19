@@ -345,9 +345,9 @@ test DualWithBasis {
 }
 test dual {
     @setEvalBranchQuota(1000000);
-    inline for (@typeInfo(primitive.Multivector).@"struct".fields) |field| {
+    inline for (@typeInfo(primitive.Multivector).@"struct".field_names) |name| {
         var blade: primitive.Multivector = .{};
-        @field(blade, field.name) = 1;
+        @field(blade, name) = 1;
 
         try expectEqual(.{
             .e0123 = 1,

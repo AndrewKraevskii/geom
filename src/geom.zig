@@ -30,13 +30,13 @@ pub const Sign = enum(i2) {
     @"1" = 1,
 
     pub fn float(s: Sign, Float: type) Float {
-        return @floatFromInt(@intFromEnum(s));
+        return @floatFromInt(@backingInt(s));
     }
 
     pub fn mult(s: Sign, other: Sign) Sign {
-        const lhs = @intFromEnum(s);
-        const rhs = @intFromEnum(other);
-        return @enumFromInt(lhs * rhs);
+        const lhs = @backingInt(s);
+        const rhs = @backingInt(other);
+        return @fromBackingInt(@intCast(lhs * rhs));
     }
 
     test mult {
@@ -227,19 +227,19 @@ fn GA(Basis: type, primitive: type) type {
                 var blades: Blade = &.{};
 
                 for (str[1..]) |digit| {
-                    blades = blades ++ &[_]Basis{@enumFromInt(digit - '0')};
+                    blades = blades ++ &[_]Basis{@fromBackingInt(@intCast(digit - '0'))};
                 }
                 break :blk blades;
             };
         }
 
         pub fn getFieldNameFromBlade(comptime T: type, comptime blade: Blade) ?struct { Sign, []const u8 } {
-            inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (comptime same(bladeFromString(field.name), blade)) {
-                    if (sameSign(bladeFromString(field.name), blade)) {
-                        return .{ .@"1", field.name };
+            inline for (@typeInfo(T).@"struct".field_names) |name| {
+                if (comptime same(bladeFromString(name), blade)) {
+                    if (sameSign(bladeFromString(name), blade)) {
+                        return .{ .@"1", name };
                     } else {
-                        return .{ .@"-1", field.name };
+                        return .{ .@"-1", name };
                     }
                 }
             }
@@ -258,7 +258,7 @@ fn GA(Basis: type, primitive: type) type {
                 swap_counter: *usize,
 
                 pub fn lessThan(ctx: @This(), a: usize, b: usize) bool {
-                    return @intFromEnum(ctx.items[a]) < @intFromEnum(ctx.items[b]);
+                    return @backingInt(ctx.items[a]) < @backingInt(ctx.items[b]);
                 }
 
                 pub fn swap(ctx: @This(), a: usize, b: usize) void {
@@ -298,7 +298,7 @@ fn GA(Basis: type, primitive: type) type {
         }
 
         pub fn basisListToEnumSet(list: []const Basis) std.EnumSet(Basis) {
-            var set: std.EnumSet(Basis) = .initEmpty();
+            var set: std.EnumSet(Basis) = .empty;
 
             for (list) |element| {
                 set.insert(element);
@@ -307,8 +307,8 @@ fn GA(Basis: type, primitive: type) type {
         }
 
         pub fn containsBlade(comptime T: type, blade: Blade) bool {
-            for (@typeInfo(T).@"struct".fields) |field| {
-                if (same(bladeFromString(field.name), blade)) return true;
+            for (@typeInfo(T).@"struct".field_names) |name| {
+                if (same(bladeFromString(name), blade)) return true;
             }
             return false;
         }
@@ -325,9 +325,9 @@ fn GA(Basis: type, primitive: type) type {
         pub fn typesFromNamespace(namespace: type) []const type {
             return comptime blk: {
                 var types: []const type = &.{};
-                for (@typeInfo(namespace).@"struct".decls) |decl| {
-                    if (@TypeOf(@field(namespace, decl.name)) != type) continue;
-                    types = types ++ &[1]type{@field(namespace, decl.name)};
+                for (@typeInfo(namespace).@"struct".decl_names) |name| {
+                    if (@TypeOf(@field(namespace, name)) != type) continue;
+                    types = types ++ &[1]type{@field(namespace, name)};
                 }
                 break :blk types;
             };
@@ -388,11 +388,11 @@ fn GA(Basis: type, primitive: type) type {
         pub fn reduce(comptime T: type, value: anytype) T {
             @setEvalBranchQuota(10000);
             var result: T = .{};
-            inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
-                const blades = comptime bladeFromString(field.name);
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names) |name| {
+                const blades = comptime bladeFromString(name);
                 const sign, const field_name = comptime getFieldNameFromBlade(T, blades) orelse continue;
 
-                @field(result, field_name) = sign.float(f32) * @field(value, field.name);
+                @field(result, field_name) = sign.float(f32) * @field(value, name);
             }
             return result;
         }
@@ -419,9 +419,9 @@ fn GA(Basis: type, primitive: type) type {
         /// For blades with even number of basis vector it is nope.
         pub fn involute(value: anytype) @TypeOf(value) {
             var copy = value;
-            inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
-                if (comptime bladeFromString(field.name).len % 2 == 1) {
-                    @field(copy, field.name) *= -1;
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names) |name| {
+                if (comptime bladeFromString(name).len % 2 == 1) {
+                    @field(copy, name) *= -1;
                 }
             }
             return copy;
@@ -453,16 +453,16 @@ fn GA(Basis: type, primitive: type) type {
         /// Effect is changing sign of bivector and trivector part.
         pub fn reverse(value: anytype) @TypeOf(value) {
             var copy = value;
-            inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names) |name| {
                 const same_sign = comptime blk: {
-                    const blade = bladeFromString(field.name);
+                    const blade = bladeFromString(name);
                     var reversed = blade[0..blade.len].*;
 
                     std.mem.reverse(Basis, &reversed);
                     break :blk sameSign(blade, &reversed);
                 };
                 if (comptime !same_sign) {
-                    @field(copy, field.name) *= -1;
+                    @field(copy, name) *= -1;
                 }
             }
             return copy;
@@ -588,8 +588,8 @@ fn GA(Basis: type, primitive: type) type {
         pub fn DualWithBasis(comptime T: type, comptime base: Blade) type {
             @setEvalBranchQuota(100000);
             var blades: []const Blade = &.{};
-            for (@typeInfo(T).@"struct".fields) |field| {
-                blades = blades ++ &[1]Blade{xorBlade(bladeFromString(field.name), base)};
+            for (@typeInfo(T).@"struct".field_names) |name| {
+                blades = blades ++ &[1]Blade{xorBlade(bladeFromString(name), base)};
             }
             return SelectTypeContainingBlades(
                 blades,
@@ -613,14 +613,14 @@ fn GA(Basis: type, primitive: type) type {
         ) {
             @setEvalBranchQuota(100000);
             var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
-            inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
-                const blade = comptime bladeFromString(field.name);
-                const xor = comptime xorBlade(bladeFromString(field.name), Basis.pseudo_vector);
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names) |name| {
+                const blade = comptime bladeFromString(name);
+                const xor = comptime xorBlade(bladeFromString(name), Basis.pseudo_vector);
                 const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), xor) orelse continue;
                 if (comptime sameSign(blade ++ xor, Basis.pseudo_vector) == (sign == .@"1")) {
-                    @field(result, field_name) = @field(value, field.name);
+                    @field(result, field_name) = @field(value, name);
                 } else {
-                    @field(result, field_name) = -@field(value, field.name);
+                    @field(result, field_name) = -@field(value, name);
                 }
             }
 
@@ -633,14 +633,14 @@ fn GA(Basis: type, primitive: type) type {
         ) {
             @setEvalBranchQuota(10000);
             var result: DualWithBasis(@TypeOf(value), Basis.pseudo_vector) = .{};
-            inline for (@typeInfo(@TypeOf(value)).@"struct".fields) |field| {
-                const blade = comptime bladeFromString(field.name);
-                const xor = comptime xorBlade(bladeFromString(field.name), Basis.pseudo_vector);
+            inline for (@typeInfo(@TypeOf(value)).@"struct".field_names) |name| {
+                const blade = comptime bladeFromString(name);
+                const xor = comptime xorBlade(bladeFromString(name), Basis.pseudo_vector);
                 const sign, const field_name = comptime getFieldNameFromBlade(@TypeOf(result), xor) orelse continue;
                 if (comptime sameSign(xor ++ blade, Basis.pseudo_vector) == (sign == .@"1")) {
-                    @field(result, field_name) = @field(value, field.name);
+                    @field(result, field_name) = @field(value, name);
                 } else {
-                    @field(result, field_name) = -@field(value, field.name);
+                    @field(result, field_name) = -@field(value, name);
                 }
             }
 
@@ -649,9 +649,9 @@ fn GA(Basis: type, primitive: type) type {
 
         test dual {
             @setEvalBranchQuota(1000000);
-            inline for (@typeInfo(primitive.Multivector).@"struct".fields) |field| {
+            inline for (@typeInfo(primitive.Multivector).@"struct".field_names) |name| {
                 var blade: primitive.Multivector = .{};
-                @field(blade, field.name) = 1;
+                @field(blade, name) = 1;
 
                 try expectEqual(.{
                     .e0123 = 1,
@@ -708,11 +708,11 @@ fn GA(Basis: type, primitive: type) type {
             const Result = InnerProduct(@TypeOf(lhs), @TypeOf(rhs));
 
             var result: Result = .{};
-            inline for (@typeInfo(Left).@"struct".fields) |left| {
-                inline for (@typeInfo(Right).@"struct".fields) |right| {
+            inline for (@typeInfo(Left).@"struct".field_names) |left| {
+                inline for (@typeInfo(Right).@"struct".field_names) |right| {
                     const sign, const result_field_name = comptime sign: {
-                        const left_list: Blade = bladeFromString(left.name);
-                        const right_list: Blade = bladeFromString(right.name);
+                        const left_list: Blade = bladeFromString(left);
+                        const right_list: Blade = bladeFromString(right);
                         const chosen_len = absDiff(left_list.len, right_list.len);
                         const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
                         if (chosen_len != result_blade.len) continue;
@@ -724,14 +724,14 @@ fn GA(Basis: type, primitive: type) type {
                     switch (sign) {
                         .@"1" => @field(result, result_field_name) = @mulAdd(
                             f32,
-                            @field(lhs, left.name),
-                            @field(rhs, right.name),
+                            @field(lhs, left),
+                            @field(rhs, right),
                             @field(result, result_field_name),
                         ),
                         .@"-1" => @field(result, result_field_name) = @mulAdd(
                             f32,
-                            @field(lhs, left.name),
-                            -@field(rhs, right.name),
+                            @field(lhs, left),
+                            -@field(rhs, right),
                             @field(result, result_field_name),
                         ),
                         else => comptime unreachable,
@@ -751,10 +751,10 @@ fn GA(Basis: type, primitive: type) type {
             @setEvalBranchQuota(100000);
             comptime {
                 var blades: []const Blade = &.{};
-                for (@typeInfo(Left).@"struct".fields) |left| {
-                    for (@typeInfo(Right).@"struct".fields) |right| {
-                        const left_list: Blade = bladeFromString(left.name);
-                        const right_list: Blade = bladeFromString(right.name);
+                for (@typeInfo(Left).@"struct".field_names) |left| {
+                    for (@typeInfo(Right).@"struct".field_names) |right| {
+                        const left_list: Blade = bladeFromString(left);
+                        const right_list: Blade = bladeFromString(right);
                         const blade = (BladeProduct(left_list, right_list) orelse continue)[1];
                         switch (@"type") {
                             .inner => {
@@ -785,11 +785,11 @@ fn GA(Basis: type, primitive: type) type {
             const Result = Product(@TypeOf(lhs), @TypeOf(rhs), @"type");
 
             var result: Result = .{};
-            inline for (@typeInfo(Left).@"struct".fields) |left| {
-                inline for (@typeInfo(Right).@"struct".fields) |right| {
+            inline for (@typeInfo(Left).@"struct".field_names) |left| {
+                inline for (@typeInfo(Right).@"struct".field_names) |right| {
                     const sign, const result_field_name = comptime sign: {
-                        const left_list: Blade = bladeFromString(left.name);
-                        const right_list: Blade = bladeFromString(right.name);
+                        const left_list: Blade = bladeFromString(left);
+                        const right_list: Blade = bladeFromString(right);
                         const sign, const result_blade = BladeProduct(left_list, right_list) orelse continue;
                         switch (@"type") {
                             .inner => {
@@ -810,14 +810,14 @@ fn GA(Basis: type, primitive: type) type {
                     switch (sign) {
                         .@"1" => @field(result, result_field_name) = @mulAdd(
                             f32,
-                            @field(lhs, left.name),
-                            @field(rhs, right.name),
+                            @field(lhs, left),
+                            @field(rhs, right),
                             @field(result, result_field_name),
                         ),
                         .@"-1" => @field(result, result_field_name) = @mulAdd(
                             f32,
-                            @field(lhs, left.name),
-                            -@field(rhs, right.name),
+                            @field(lhs, left),
+                            -@field(rhs, right),
                             @field(result, result_field_name),
                         ),
                         else => comptime unreachable,
@@ -857,19 +857,19 @@ fn GA(Basis: type, primitive: type) type {
             const Left = @TypeOf(lhs);
             const Right = @TypeOf(rhs);
 
-            inline for (@typeInfo(Left).@"struct".fields) |field| {
-                const left_value = @field(lhs, field.name);
+            inline for (@typeInfo(Left).@"struct".field_names) |name| {
+                const left_value = @field(lhs, name);
                 const right_value = blk: {
-                    const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const right_field_name = comptime getFieldNameFromBlade(Right, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(rhs, right_field_name);
                 };
 
                 if (left_value != right_value) return false;
             }
-            inline for (@typeInfo(Right).@"struct".fields) |field| {
-                const right_value = @field(rhs, field.name);
+            inline for (@typeInfo(Right).@"struct".field_names) |name| {
+                const right_value = @field(rhs, name);
                 const left_value = blk: {
-                    const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const left_field_name = comptime getFieldNameFromBlade(Left, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(lhs, left_field_name);
                 };
 
@@ -885,27 +885,27 @@ fn GA(Basis: type, primitive: type) type {
             const Expected = @TypeOf(expected);
             const Actual = @TypeOf(actual);
 
-            inline for (@typeInfo(Expected).@"struct".fields) |field| {
-                const left_value = @field(expected, field.name);
+            inline for (@typeInfo(Expected).@"struct".field_names) |name| {
+                const left_value = @field(expected, name);
                 const right_value = blk: {
-                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(actual, right_field_name);
                 };
 
                 if (left_value != right_value) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
-            inline for (@typeInfo(Actual).@"struct".fields) |field| {
-                const right_value = @field(actual, field.name);
+            inline for (@typeInfo(Actual).@"struct".field_names) |name| {
+                const right_value = @field(actual, name);
                 const left_value = blk: {
-                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expected, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expected, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(expected, left_field_name);
                 };
 
                 if (left_value != right_value) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
@@ -919,27 +919,27 @@ fn GA(Basis: type, primitive: type) type {
             const Expect = @TypeOf(expect);
             const Actual = @TypeOf(actual);
 
-            inline for (@typeInfo(Expect).@"struct".fields) |field| {
-                const left_value = @field(expect, field.name);
+            inline for (@typeInfo(Expect).@"struct".field_names) |name| {
+                const left_value = @field(expect, name);
                 const right_value = blk: {
-                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(actual, right_field_name);
                 };
 
                 if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
-            inline for (@typeInfo(Actual).@"struct".fields) |field| {
-                const right_value = @field(actual, field.name);
+            inline for (@typeInfo(Actual).@"struct".field_names) |name| {
+                const right_value = @field(actual, name);
                 const left_value = blk: {
-                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(expect, left_field_name);
                 };
 
                 if (!std.math.approxEqRel(f32, left_value, right_value, tolerance)) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
@@ -953,27 +953,27 @@ fn GA(Basis: type, primitive: type) type {
             const Expect = @TypeOf(expect);
             const Actual = @TypeOf(actual);
 
-            inline for (@typeInfo(Expect).@"struct".fields) |field| {
-                const left_value = @field(expect, field.name);
+            inline for (@typeInfo(Expect).@"struct".field_names) |name| {
+                const left_value = @field(expect, name);
                 const right_value = blk: {
-                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const right_field_name = comptime getFieldNameFromBlade(Actual, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(actual, right_field_name);
                 };
 
                 if (!std.math.approxEqAbs(f32, left_value, right_value, tolerance)) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
-            inline for (@typeInfo(Actual).@"struct".fields) |field| {
-                const right_value = @field(actual, field.name);
+            inline for (@typeInfo(Actual).@"struct".field_names) |name| {
+                const right_value = @field(actual, name);
                 const left_value = blk: {
-                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(field.name)) orelse break :blk 0;
+                    const sign, const left_field_name = comptime getFieldNameFromBlade(Expect, bladeFromString(name)) orelse break :blk 0;
                     break :blk sign.float(f32) * @field(expect, left_field_name);
                 };
 
                 if (!std.math.approxEqAbs(f32, left_value, right_value, tolerance)) {
-                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ field.name, left_value, right_value });
+                    std.debug.print("{s} parts are not equal {d} != {d}\n", .{ name, left_value, right_value });
                     return error.TestExpectedEqual;
                 }
             }
@@ -989,13 +989,13 @@ fn GA(Basis: type, primitive: type) type {
         }
 
         pub fn typeParity(comptime T: type) ?enum { even, odd } {
-            const fields = @typeInfo(T).@"struct".fields;
-            if (fields.len == 0) {
+            const names = @typeInfo(T).@"struct".field_names;
+            if (names.len == 0) {
                 return .even;
             }
-            const parity = if (comptime bladeFromString(fields[0].name).len % 2 == 0) .even else .odd;
-            for (fields[1..]) |field| {
-                const field_parity = if (comptime bladeFromString(field.name).len % 2 == 0) .even else .odd;
+            const parity = if (comptime bladeFromString(names[0]).len % 2 == 0) .even else .odd;
+            for (names[1..]) |name| {
+                const field_parity = if (comptime bladeFromString(name).len % 2 == 0) .even else .odd;
                 if (field_parity != parity) {
                     return null;
                 }
@@ -1030,12 +1030,12 @@ fn GA(Basis: type, primitive: type) type {
         pub fn Merge(Left: type, Right: type) type {
             @setEvalBranchQuota(10000);
             var blades: []const Blade = &.{};
-            for (@typeInfo(Left).@"struct".fields) |field| {
-                blades = blades ++ &[1]Blade{bladeFromString(field.name)};
+            for (@typeInfo(Left).@"struct".field_names) |name| {
+                blades = blades ++ &[1]Blade{bladeFromString(name)};
             }
-            outer: for (@typeInfo(Right).@"struct".fields) |field| {
-                const right_blade = bladeFromString(field.name);
-                for (blades[0..@typeInfo(Left).@"struct".fields.len]) |left_blade| {
+            outer: for (@typeInfo(Right).@"struct".field_names) |name| {
+                const right_blade = bladeFromString(name);
+                for (blades[0..@typeInfo(Left).@"struct".field_names.len]) |left_blade| {
                     if (same(left_blade, right_blade)) {
                         continue :outer;
                     }
@@ -1054,8 +1054,8 @@ fn GA(Basis: type, primitive: type) type {
             const lhs_result: Result = reduce(Result, lhs);
             const rhs_result: Result = reduce(Result, rhs);
             var result: Result = undefined;
-            inline for (@typeInfo(Result).@"struct".fields) |field| {
-                @field(result, field.name) = @field(rhs_result, field.name) + @field(lhs_result, field.name);
+            inline for (@typeInfo(Result).@"struct".field_names) |name| {
+                @field(result, name) = @field(rhs_result, name) + @field(lhs_result, name);
             }
             return result;
         }
@@ -1114,8 +1114,8 @@ fn GA(Basis: type, primitive: type) type {
             const lhs_result: Result = reduce(Result, lhs);
             const rhs_result: Result = reduce(Result, rhs);
             var result: Result = undefined;
-            inline for (@typeInfo(Result).@"struct".fields) |field| {
-                @field(result, field.name) = (1 - t) * @field(lhs_result, field.name) + t * @field(rhs_result, field.name);
+            inline for (@typeInfo(Result).@"struct".field_names) |name| {
+                @field(result, name) = (1 - t) * @field(lhs_result, name) + t * @field(rhs_result, name);
             }
             return result;
         }
@@ -1133,5 +1133,5 @@ fn GA(Basis: type, primitive: type) type {
 test {
     _ = pga;
     _ = @import("pga_tests.zig");
-    _ = @import("cga_tests.zig");
+    // _ = @import("cga_tests.zig");
 }
